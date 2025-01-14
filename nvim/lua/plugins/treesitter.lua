@@ -7,7 +7,7 @@ return {
         config.setup({
             auto_install = true,
             highlight = { enabled = true },
-            indent = { enable = true },
+            -- indent = { enable = true },
         })
     end
 }

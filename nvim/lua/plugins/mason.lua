@@ -24,6 +24,9 @@ return {
 
         local mason_packages = {
             "lua-language-server",
+            "csharpier",
+            "netcoredbg",
+            "omnisharp",
         }
 
         if vim.fn.has("win32") == 0 then
