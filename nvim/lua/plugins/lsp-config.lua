@@ -11,21 +11,6 @@ return {
                 capabilities = capabilities
             })
 
-            -- c#
-
-            -- Path to Mason root
-            local mason_root = vim.fn.stdpath("data") .. "\\mason\\packages\\"
-
-            lspconfig.omnisharp.setup {
-                cmd = { "dotnet", mason_root .. "omnisharp/libexec/omnisharp.dll" },
-                capabilities = capabilities,
-                settings = {
-                    formattingoptions = {
-                        organizeimports = true,
-                    },
-                },
-            }
-
             -- keymaps for lsp
             vim.keymap.set("n", "K", vim.lsp.buf.hover, {})
             vim.keymap.set("n", "gd", vim.lsp.buf.definition, {})
