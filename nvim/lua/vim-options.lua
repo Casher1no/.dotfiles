@@ -29,3 +29,9 @@ vim.keymap.set('n', '<C-z>', 'u', { desc = "Undo last action" })
 vim.keymap.set('i', '<C-z>', '<C-o>u', { desc = "Undo last action in insert mode" })
 
 vim.keymap.set('i', '<C-h>', '<C-w>', { desc = "Delete previous word in insert mode" })
+
+vim.api.nvim_set_keymap('n', '<C-h>', ':vertical resize -2<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<C-j>', ':resize +2<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<C-k>', ':resize -2<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<C-l>', ':vertical resize +2<CR>', { noremap = true, silent = true })
+
