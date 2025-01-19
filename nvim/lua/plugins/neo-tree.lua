@@ -20,6 +20,10 @@ return {
                     padding = 1, -- extra padding on left hand side
                     with_markers = false,
                     highlight = "NeoTreeIndentMarker",
+                    with_expanders = true,
+                    expander_collapsed = "",
+                    expander_expanded = "",
+                    expander_highlight = "NeoTreeExpander",
                 },
             },
             filesystem = {

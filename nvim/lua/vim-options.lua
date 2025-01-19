@@ -6,6 +6,8 @@ vim.cmd("set wrap!")
 vim.cmd("set relativenumber")
 vim.cmd("set cursorline")
 
+vim.opt.scrolloff = 10
+
 vim.opt.number = true
 vim.opt.signcolumn = "number"
 vim.opt.colorcolumn = "120"
