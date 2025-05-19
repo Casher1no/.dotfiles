@@ -6,8 +6,8 @@ return {
 
 		config = function()
 			local builtin = require("telescope.builtin")
-			vim.keymap.set("n", "<C-p>", builtin.find_files, {})
-			vim.keymap.set("n", "<C-f>", builtin.live_grep, {})
+			vim.keymap.set("n", "<C-p>", builtin.find_files, { desc = "Find Files" })
+			vim.keymap.set("n", "<C-f>", builtin.live_grep, { desc = "Live Grep" })
 
 			-- Define your settings with commands
 			local settings = {
@@ -45,7 +45,7 @@ return {
 					:find()
 			end
 
-			vim.keymap.set("n", "<leader>ss", show_settings, {})
+			vim.keymap.set("n", "<leader>ss", show_settings, { desc = "Show Settings" })
 		end,
 	},
 }

@@ -1,7 +1,7 @@
 return {
-    {
-        "hrsh7th/cmp-nvim-lsp",
-    },
+	{
+		"hrsh7th/cmp-nvim-lsp",
+	},
 	{
 		"L3MON4D3/LuaSnip",
 		dependencies = {
@@ -27,11 +27,11 @@ return {
 					documentation = cmp.config.window.bordered(),
 				},
 				mapping = cmp.mapping.preset.insert({
-					["<C-j>"] = cmp.mapping.scroll_docs(-4),
-					["<C-k>"] = cmp.mapping.scroll_docs(4),
-					["<C-Space>"] = cmp.mapping.complete(),
-					["<C-e>"] = cmp.mapping.abort(),
-					["<CR>"] = cmp.mapping.confirm({ select = true }), -- Accept currently selected item. Set `select` to `false` to only confirm explicitly selected items.
+					["<C-j>"] = cmp.mapping.scroll_docs(-4, { desc = "Cmp: Scroll documentation up" }),
+					["<C-k>"] = cmp.mapping.scroll_docs(4, { desc = "Cmp: Scroll documentation down" }),
+					["<C-Space>"] = cmp.mapping.complete({ desc = "Cmp: Trigger completion menu" }),
+					["<C-e>"] = cmp.mapping.abort({ desc = "Cmp: Abort completion" }),
+					["<CR>"] = cmp.mapping.confirm({ select = true, desc = "Cmp: Confirm selection" }),
 				}),
 				sources = cmp.config.sources({
 					{ name = "nvim_lsp" },
