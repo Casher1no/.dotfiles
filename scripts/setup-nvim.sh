@@ -1,70 +1,68 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Neovim Setup Script ==="
-
 # -------------------------
-# 1. Detect OS
+# Install Chocolatey (if not installed)
 # -------------------------
-OS_TYPE="unknown"
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    if grep -qi microsoft /proc/version 2>/dev/null; then
-        OS_TYPE="wsl"
-    else
-        OS_TYPE="linux"
-    fi
-elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "win32" ]]; then
-    OS_TYPE="windows"
+if ! command -v choco &> /dev/null; then
+    echo "➡ Installing Chocolatey..."
+    powershell -NoProfile -ExecutionPolicy Bypass -Command \
+        "Set-ExecutionPolicy Bypass -Scope Process; \
+         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+else
+    echo "✔ Chocolatey already installed, skipping..."
 fi
 
-echo "➡ Detected OS: $OS_TYPE"
+echo "=== Neovim Setup Script for Windows ==="
 
 # -------------------------
-# 2. Install dependencies
+# 1. Install dependencies
 # -------------------------
-install_windows() {
-    if ! command -v winget &> /dev/null; then
-        echo "❌ winget not found. Please install it from Microsoft Store."
-        exit 1
-    fi
+if ! command -v winget &> /dev/null; then
+    echo "❌ winget not found. Please install it from Microsoft Store."
+    exit 1
+fi
 
-    for pkg in "Neovim.Neovim" "Git.Git" "JesseDuffield.lazygit" "NerdFonts.Hurmit"; do
-        cmd_name=$(echo $pkg | awk -F. '{print $2}' | tr '[:upper:]' '[:lower:]')
-        if ! command -v $cmd_name &> /dev/null && [ "$pkg" != "NerdFonts.Hurmit" ]; then
-            echo "➡ Installing $cmd_name..."
-            winget install -e --id $pkg -h
-        elif [ "$pkg" == "NerdFonts.Hurmit" ]; then
-            fc-list | grep -qi "Hurmit Nerd Font" || winget install -e --id $pkg -h
-        else
-            echo "✔ $cmd_name already installed, skipping..."
-        fi
-    done
-}
+if ! command -v nvim &> /dev/null; then
+    echo "➡ Installing Neovim..."
+    winget install -e --id Neovim.Neovim -h
+else
+    echo "✔ Neovim already installed, skipping..."
+fi
 
-install_linux() {
-    echo "➡ Updating package list..."
-    sudo apt update
-    for pkg in neovim git lazygit; do
-        if ! command -v $pkg &> /dev/null; then
-            echo "➡ Installing $pkg..."
-            sudo apt install -y $pkg
-        else
-            echo "✔ $pkg already installed, skipping..."
-        fi
-    done
-}
+if ! command -v git &> /dev/null; then
+    echo "➡ Installing Git..."
+    winget install -e --id Git.Git -h
+else
+    echo "✔ Git already installed, skipping..."
+fi
 
-if [ "$OS_TYPE" == "windows" ]; then
-    install_windows
-elif [ "$OS_TYPE" == "linux" ] || [ "$OS_TYPE" == "wsl" ]; then
-    install_linux
+if ! command -v lazygit &> /dev/null; then
+    echo "➡ Installing Lazygit..."
+    winget install -e --id JesseDuffield.lazygit -h
+else
+    echo "✔ Lazygit already installed, skipping..."
+fi
+
+if ! ls /c/Windows/Fonts | grep -qi "Hurmit"; then
+    echo "➡ Installing Hurmit Nerd Font..."
+    winget install -e --id NerdFonts.Hurmit -h
+else
+    echo "✔ Hurmit Nerd Font already installed, skipping..."
+fi
+
+if ! command -v fd &> /dev/null; then
+    echo "➡ Installing fd (optional, improves file search)..."
+    cmd //c "winget install -e --id fd-find.fd -h || echo '⚠ fd install failed'"
+else
+    echo "✔ fd already installed, skipping..."
 fi
 
 # -------------------------
-# 3. Detect paths
+# 2. Detect paths
 # -------------------------
 CONFIG_TARGET="$HOME/AppData/Local/nvim"
-[ "$OS_TYPE" == "linux" ] && CONFIG_TARGET="$HOME/.config/nvim"
 
 if [ -d "$PWD/nvim" ]; then
     DOTFILES_NVIM="$PWD/nvim"
@@ -79,7 +77,7 @@ else
 fi
 
 # -------------------------
-# 4. Backup old config
+# 3. Backup old config
 # -------------------------
 if [ -d "$CONFIG_TARGET" ] || [ -L "$CONFIG_TARGET" ]; then
     echo "⚠ Found existing config, backing up..."
@@ -87,18 +85,19 @@ if [ -d "$CONFIG_TARGET" ] || [ -L "$CONFIG_TARGET" ]; then
 fi
 
 # -------------------------
-# 5. Create symlink
+# 4. Create symlink
 # -------------------------
 create_symlink() {
     local source="$1"
     local target="$2"
 
-    if [ "$OS_TYPE" == "windows" ]; then
-        echo "➡ Creating Windows symlink..."
-        cmd //c "mklink /D $(cygpath -w "$target") $(cygpath -w "$source")"
-    else
-        echo "➡ Creating Linux symlink..."
+    # Check if WSL
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "➡ WSL detected → using ln -s"
         ln -s "$source" "$target"
+    else
+        echo "➡ Git Bash / Windows detected → using mklink"
+        cmd //c "mklink /D $(cygpath -w "$target") $(cygpath -w "$source")"
     fi
 }
 
@@ -106,8 +105,9 @@ echo "➡ Linking $DOTFILES_NVIM → $CONFIG_TARGET"
 create_symlink "$DOTFILES_NVIM" "$CONFIG_TARGET"
 
 # -------------------------
-# 6. Done
+# 5. Done
 # -------------------------
 echo ""
 echo "=== ✅ Neovim setup complete! Run 'nvim' to start ==="
-[ "$OS_TYPE" == "windows" ] && read -p "Press Enter to close..."
+echo ""
+read -p "Press Enter to close..."
