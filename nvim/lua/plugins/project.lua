@@ -3,12 +3,12 @@ return {
 	opts = {
 		projects = { -- define project roots
 			"~/Projects/*",
-			"~/nvim/*",
+			"~/nvim",
 			"~/projects/*",
 			"~/p*cts/*", -- glob pattern is supported
 			"~/projects/repos/*",
-			"~/.config/*",
-			"~/work/*",
+			"F:/Projects/*",
+			"C:/.dotfiles/nvim",
 		},
 		picker = {
 			type = "telescope", -- or "fzf-lua"

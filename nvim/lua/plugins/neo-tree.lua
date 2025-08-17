@@ -36,6 +36,7 @@ return {
                     hide_gitignore = true,
                     hide_by_pattern = {
                         "*.meta",
+                        "*.cs.uid"
                     },
                     never_show = {
                         ".git",

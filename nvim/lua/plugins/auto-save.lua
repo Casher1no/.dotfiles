@@ -8,7 +8,7 @@ return {
 				return ""
 			end,
 		},
-		trigger_events = { "InsertLeave", "TextChanged", "FocusLost" },
+		trigger_events = { "InsertLeave", "FocusLost" },
 		debounce_delay = 135,
 		condition = function(buf)
 			local fn = vim.fn
