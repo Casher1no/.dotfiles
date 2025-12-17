@@ -8,7 +8,7 @@ return {
     },
 
     config = function()
-        vim.keymap.set("n", "<C-e>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Neo-tree" })
+        vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Neo-tree" })
         require("neo-tree").setup({
             window = {
                 position = "right",
@@ -16,7 +16,7 @@ return {
             },
             default_component_configs = {
                 indent = {
-                    indent_size = 1,
+                    indent_size = 2,
                     padding = 1, -- extra padding on left hand side
                     with_markers = false,
                     highlight = "NeoTreeIndentMarker",

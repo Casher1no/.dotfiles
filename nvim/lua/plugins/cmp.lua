@@ -36,7 +36,7 @@ return {
                     { name = "buffer" },
                 }),
                 experimental = {
-                    ghost_text = true,  -- inline suggestions like VSCode
+                    ghost_text = true, 
                 },
             })
         end,

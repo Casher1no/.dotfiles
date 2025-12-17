@@ -33,10 +33,6 @@ return {
 
         commander.add({
             {
-                desc = "Center View",
-                cmd = "<CMD>NoNeckPain<CR>",
-            },
-            {
                 desc = "Mason",
                 cmd = "<CMD>Mason<CR>",
             },
