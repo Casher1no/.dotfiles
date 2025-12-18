@@ -36,4 +36,3 @@ vim.api.nvim_set_keymap('n', '<C-h>', ':vertical resize -2<CR>', { noremap = tru
 vim.api.nvim_set_keymap('n', '<C-j>', ':resize +2<CR>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<C-k>', ':resize -2<CR>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<C-l>', ':vertical resize +2<CR>', { noremap = true, silent = true })
-
