@@ -1,6 +1,7 @@
 return {
 	"nvim-treesitter/nvim-treesitter",
 	build = ":TSUpdate",
+	lazy = false,
 	opts = {
 		ensure_installed = {
 			"go",
@@ -10,13 +11,26 @@ return {
 			"markdown",
 			"markdown_inline",
 			"sql",
+			"php",
+			"phpdoc",
+			"vue",
+			"html",
+			"css",
+			"scss",
+			"javascript",
+			"typescript",
+			"tsx",
+			"json",
+			"java",
+			"python",
 		},
+		auto_install = false,
 		highlight = {
 			enable = true,
-			additional_vim_regex_highlighting = false, -- Use only Treesitter for highlighting
+			additional_vim_regex_highlighting = false,
 		},
 		indent = {
-			enable = true, -- Enable Treesitter-based indentation
+			enable = true,
 		},
 	},
 }

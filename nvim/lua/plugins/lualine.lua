@@ -5,7 +5,7 @@ return {
     config = function()
         local function lsp_name()
             local buf_ft = vim.bo.filetype
-            for _, client in ipairs(vim.lsp.get_active_clients({ bufnr = 0 })) do
+            for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
                 if client.config.filetypes and vim.tbl_contains(client.config.filetypes, buf_ft) then
                     return client.name
                 end
