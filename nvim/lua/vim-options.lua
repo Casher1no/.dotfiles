@@ -15,24 +15,35 @@ vim.opt.colorcolumn = "120"
 vim.g.mapleader = " "
 
 -- Save file with Ctrl+S
-vim.keymap.set('n', '<C-S>', ':w<CR>', { desc = "Save file" })
-vim.keymap.set('i', '<C-S>', '<Esc>:w<CR>', { desc = "Save file" })
+vim.keymap.set("n", "<C-S>", ":w<CR>", { desc = "Save file" })
+vim.keymap.set("i", "<C-S>", "<Esc>:w<CR>", { desc = "Save file" })
 
-vim.keymap.set('n', '<C-v>', '"+p', { desc = "Paste from clipboard" })
-vim.keymap.set('v', '<C-v>', '"+p', { desc = "Paste from clipboard" })
+vim.keymap.set("n", "<C-v>", '"+p', { desc = "Paste from clipboard" })
+vim.keymap.set("v", "<C-v>", '"+p', { desc = "Paste from clipboard" })
 
-vim.keymap.set('v', '<C-x>', '"+d', { desc = "Cut to clipboard" })
-vim.keymap.set('v', '<C-c>', '"+y', { desc = "Copy to clipboard" })
+vim.keymap.set("v", "<C-x>", '"+d', { desc = "Cut to clipboard" })
+vim.keymap.set("v", "<C-c>", '"+y', { desc = "Copy to clipboard" })
 
-vim.keymap.set('v', 'J', ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
-vim.keymap.set('v', 'K', ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })
+vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
+vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })
 
-vim.keymap.set('n', '<C-z>', 'u', { desc = "Undo last action" })
-vim.keymap.set('i', '<C-z>', '<C-o>u', { desc = "Undo last action in insert mode" })
+vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
+vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
 
-vim.keymap.set('i', '<C-h>', '<C-w>', { desc = "Delete previous word in insert mode" })
+vim.keymap.set("i", "<C-h>", "<C-w>", { desc = "Delete previous word in insert mode" })
 
-vim.api.nvim_set_keymap('n', '<C-h>', ':vertical resize -2<CR>', { noremap = true, silent = true })
-vim.api.nvim_set_keymap('n', '<C-j>', ':resize +2<CR>', { noremap = true, silent = true })
-vim.api.nvim_set_keymap('n', '<C-k>', ':resize -2<CR>', { noremap = true, silent = true })
-vim.api.nvim_set_keymap('n', '<C-l>', ':vertical resize +2<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<C-h>", ":vertical resize -2<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<C-j>", ":resize +2<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<C-k>", ":resize -2<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<C-l>", ":vertical resize +2<CR>", { noremap = true, silent = true })
+
+-- Delete without yanking
+vim.keymap.set("n", "d", '"_d', { noremap = true })
+vim.keymap.set("v", "d", '"_d', { noremap = true })
+
+-- Keep 'dd' to delete line without yanking
+vim.keymap.set("n", "dd", '"_dd', { noremap = true })
+
+-- Optional: Use leader+d for "cut" (normal delete behavior)
+vim.keymap.set("n", "<leader>d", "d", { noremap = true })
+vim.keymap.set("v", "<leader>d", "d", { noremap = true })

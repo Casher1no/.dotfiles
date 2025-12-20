@@ -9,6 +9,7 @@ return {
 			"~/projects/repos/*",
 			"F:/Projects/*",
 			"C:/.dotfiles/nvim",
+			"~/Projects/.dotfiles/nvim",
 		},
 		picker = {
 			type = "telescope", -- or "fzf-lua"
