@@ -9,7 +9,7 @@ return {
             "pyright",
             "tailwindcss",
             "laravel_ls",
-            "angularls"
+            "angularls",
         }
 
         -- Register each server config with the new vim.lsp.config API
