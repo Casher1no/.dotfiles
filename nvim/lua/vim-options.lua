@@ -30,12 +30,28 @@ vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" }
 vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
 vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
 
+-- Go to previous (alternate) file with Cmd+6.
+-- In iTerm2 this fires because Cmd+6 is set to send 0x1e (= <C-^>); this
+-- mapping also makes Cmd+6 work directly in GUI clients like Neovide.
+vim.keymap.set("n", "<D-6>", "<C-^>", { desc = "Go to previous file" })
+
 vim.keymap.set("i", "<C-h>", "<C-w>", { desc = "Delete previous word in insert mode" })
 
 vim.api.nvim_set_keymap("n", "<C-h>", ":vertical resize -2<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<C-j>", ":resize +2<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<C-k>", ":resize -2<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<C-l>", ":vertical resize +2<CR>", { noremap = true, silent = true })
+
+-- Focus the next / previous window (split), e.g. jump between two side-by-side files
+vim.keymap.set("n", "<leader>nb", "<C-w>w", { desc = "Focus next window" })
+vim.keymap.set("n", "<leader>pb", "<C-w>W", { desc = "Focus previous window" })
+
+-- Window navigation (jump between splits, e.g. into the references/quickfix panel)
+vim.keymap.set("n", "<leader>ww", "<C-w>w", { desc = "Cycle to next window" })
+vim.keymap.set("n", "<leader>wh", "<C-w>h", { desc = "Go to left window" })
+vim.keymap.set("n", "<leader>wj", "<C-w>j", { desc = "Go to lower window" })
+vim.keymap.set("n", "<leader>wk", "<C-w>k", { desc = "Go to upper window" })
+vim.keymap.set("n", "<leader>wl", "<C-w>l", { desc = "Go to right window" })
 
 -- Delete without yanking
 vim.keymap.set("n", "d", '"_d', { noremap = true })
