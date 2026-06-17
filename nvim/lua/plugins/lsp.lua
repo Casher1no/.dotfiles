@@ -10,7 +10,7 @@ return {
             "vtsls",
             "angularls",
             "pyright",
-            "jdtls",
+            -- jdtls is started by nvim-jdtls (see plugins/jdtls.lua), not here.
         }
 
         -- Advertise blink.cmp's richer completion capabilities to every server
@@ -64,6 +64,11 @@ return {
                 vim.keymap.set("n", "go", tb.lsp_type_definitions, opts)
                 vim.keymap.set("n", "gr", tb.lsp_references, opts)
                 vim.keymap.set("n", "gs", tb.lsp_document_symbols, opts)
+
+                -- Call hierarchy: who calls this (incoming) / what it calls
+                -- (outgoing). Answers "what uses this method" as a navigable tree.
+                vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, opts)
+                vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, opts)
 
                 -- Code actions and refactoring
                 vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)

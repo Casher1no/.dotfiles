@@ -38,14 +38,18 @@ function M.get()
     return nil
 end
 
--- cd into the last project and load its saved session.
+-- cd into the last project and load its saved session. Deferred so it runs
+-- after the dashboard finishes handling the keypress (otherwise the session is
+-- restored "underneath" the dashboard and nothing appears to happen).
 function M.continue()
     local dir = M.get()
     if not dir then
         return
     end
-    vim.cmd("cd " .. vim.fn.fnameescape(dir))
-    require("persistence").load()
+    vim.schedule(function()
+        vim.cmd("cd " .. vim.fn.fnameescape(dir))
+        require("persistence").load()
+    end)
 end
 
 return M

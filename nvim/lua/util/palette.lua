@@ -142,6 +142,63 @@ M.categories = {
         },
     },
     {
+        name = "Themes",
+        icon = "",
+        -- on_focus previews the theme as you move through the list; <CR> applies
+        -- and persists it via themery (closing without selecting reverts).
+        on_focus = function(item)
+            if item.theme then
+                pcall(vim.cmd.colorscheme, item.theme)
+            end
+        end,
+        items = (function()
+            local names = { "catppuccin", "kanagawa-wave", "gruvbox", "oxocarbon", "onedark", "rose-pine" }
+            local items = {}
+            for _, name in ipairs(names) do
+                items[#items + 1] = {
+                    desc = name,
+                    theme = name,
+                    action = function()
+                        require("themery").setThemeByName(name, true)
+                    end,
+                }
+            end
+            return items
+        end)(),
+    },
+    {
+        name = "LSP / Code",
+        icon = "",
+        items = {
+            { desc = "Go to definition", keys = "gd" },
+            { desc = "Go to declaration", keys = "gD" },
+            { desc = "Go to implementations", keys = "gi" },
+            { desc = "Go to type definition", keys = "go" },
+            { desc = "Find references / usages", keys = "gr" },
+            { desc = "Incoming calls (who calls this)", keys = "<leader>ci" },
+            { desc = "Outgoing calls (what this calls)", keys = "<leader>co" },
+            { desc = "Document symbols", keys = "gs" },
+            { desc = "Hover docs", keys = "K" },
+            { desc = "Code action", keys = "<leader>ca" },
+            { desc = "Rename symbol", keys = "<leader>rn" },
+        },
+    },
+    {
+        name = "Debug",
+        icon = "",
+        items = {
+            { desc = "Toggle breakpoint", keys = "<leader>b", action = function() require("dap").toggle_breakpoint() end },
+            { desc = "Conditional breakpoint", keys = "<leader>B" },
+            { desc = "Start / Continue", keys = "<F5>", action = function() require("dap").continue() end },
+            { desc = "Step over", keys = "<F10>", action = function() require("dap").step_over() end },
+            { desc = "Step into", keys = "<F11>", action = function() require("dap").step_into() end },
+            { desc = "Step out", keys = "<S-F11>", action = function() require("dap").step_out() end },
+            { desc = "Terminate", keys = "<S-F5>", action = function() require("dap").terminate() end },
+            { desc = "Toggle debug UI", keys = "<F6>", action = function() require("dapui").toggle() end },
+            { desc = "Inspect / eval", keys = "<leader>i" },
+        },
+    },
+    {
         name = "Help",
         icon = "",
         items = {
@@ -160,6 +217,8 @@ local state = {
     cat_buf = nil,
     act_win = nil,
     act_buf = nil,
+    orig_colorscheme = nil, -- restored if a theme preview isn't confirmed
+    confirmed = false, -- set when an action is run via <CR>
 }
 
 local LEFT_W = 24
@@ -167,6 +226,10 @@ local RIGHT_W = 48
 local GAP = 1
 
 local function close()
+    -- Undo a live theme preview unless the user actually selected one.
+    if not state.confirmed and state.orig_colorscheme and vim.g.colors_name ~= state.orig_colorscheme then
+        pcall(vim.cmd.colorscheme, state.orig_colorscheme)
+    end
     for _, w in ipairs({ state.act_win, state.cat_win }) do
         if w and vim.api.nvim_win_is_valid(w) then
             vim.api.nvim_win_close(w, true)
@@ -209,6 +272,10 @@ local function run_action(line)
     local cat = M.categories[state.selected]
     local idx = line - 2 -- two header lines
     local item = cat.items[idx]
+    -- Mark confirmed so close() keeps a previewed theme instead of reverting.
+    if item then
+        state.confirmed = true
+    end
     close()
     if item and item.action then
         vim.schedule(item.action)
@@ -223,6 +290,8 @@ end
 
 function M.open()
     state.selected = 1
+    state.confirmed = false
+    state.orig_colorscheme = vim.g.colors_name
 
     -- Refresh any categories whose contents are computed at open time.
     for _, cat in ipairs(M.categories) do
@@ -250,8 +319,11 @@ function M.open()
         title_pos = "center",
     })
 
+    vim.bo[state.cat_buf].bufhidden = "wipe"
+
     -- Right pane (actions)
     state.act_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[state.act_buf].bufhidden = "wipe"
     state.act_win = vim.api.nvim_open_win(state.act_buf, false, {
         relative = "editor",
         width = RIGHT_W,
@@ -264,6 +336,23 @@ function M.open()
 
     render_left()
     render_right()
+
+    -- Fire the focused category's on_focus as the cursor moves in the right
+    -- pane (used for live theme preview).
+    vim.api.nvim_create_autocmd("CursorMoved", {
+        buffer = state.act_buf,
+        callback = function()
+            local cat = M.categories[state.selected]
+            if not cat.on_focus then
+                return
+            end
+            local line = vim.api.nvim_win_get_cursor(state.act_win)[1]
+            local item = cat.items[line - 2]
+            if item then
+                cat.on_focus(item)
+            end
+        end,
+    })
 
     local function map(buf, lhs, fn)
         vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, silent = true })
