@@ -12,6 +12,9 @@ vim.opt.number = true
 vim.opt.signcolumn = "number"
 vim.opt.colorcolumn = "120"
 
+-- What persistence.nvim stores in a session (buffers, layout, cwd, …)
+vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
+
 vim.g.mapleader = " "
 
 -- Save file with Ctrl+S
@@ -63,3 +66,26 @@ vim.keymap.set("n", "dd", '"_dd', { noremap = true })
 -- Optional: Use leader+d for "cut" (normal delete behavior)
 vim.keymap.set("n", "<leader>d", "d", { noremap = true })
 vim.keymap.set("v", "<leader>d", "d", { noremap = true })
+
+-- Centered command palette of this config's own keymaps (see lua/util/palette.lua)
+vim.keymap.set("n", "<leader><space>", function()
+	require("util.palette").open()
+end, { desc = "Command palette" })
+
+-- Run a saved project task (manage them in the palette → Project Commands)
+vim.keymap.set("n", "<leader>r", function()
+	require("util.tasks").run_interactive()
+end, { desc = "Run project task" })
+
+-- Terminal: let <C-w> window motions work straight from terminal-insert mode
+-- so you can jump out of terminals (e.g. Claude Code) without first pressing
+-- <C-\><C-n>. Esc stays untouched for terminal TUIs.
+vim.keymap.set("t", "<C-w>h", [[<C-\><C-n><C-w>h]], { desc = "Go to left window" })
+vim.keymap.set("t", "<C-w>j", [[<C-\><C-n><C-w>j]], { desc = "Go to lower window" })
+vim.keymap.set("t", "<C-w>k", [[<C-\><C-n><C-w>k]], { desc = "Go to upper window" })
+vim.keymap.set("t", "<C-w>l", [[<C-\><C-n><C-w>l]], { desc = "Go to right window" })
+vim.keymap.set("t", "<C-w>w", [[<C-\><C-n><C-w>w]], { desc = "Cycle to next window" })
+vim.keymap.set("t", "<C-w><Left>", [[<C-\><C-n><C-w>h]], { desc = "Go to left window" })
+vim.keymap.set("t", "<C-w><Down>", [[<C-\><C-n><C-w>j]], { desc = "Go to lower window" })
+vim.keymap.set("t", "<C-w><Up>", [[<C-\><C-n><C-w>k]], { desc = "Go to upper window" })
+vim.keymap.set("t", "<C-w><Right>", [[<C-\><C-n><C-w>l]], { desc = "Go to right window" })

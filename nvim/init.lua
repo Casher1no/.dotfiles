@@ -18,4 +18,5 @@ vim.opt.clipboard = "unnamedplus"
 local opts = {}
 
 require("vim-options")
+require("config.autocmds")
 require("lazy").setup("plugins")

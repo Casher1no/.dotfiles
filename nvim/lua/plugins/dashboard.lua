@@ -38,39 +38,63 @@ local function project_picker()
         :find()
 end
 
+-- Dashboard action keys. Prepends "Continue — <project>" when a previous
+-- project was recorded, so it always sits at the top.
+local function dashboard_keys()
+    local keys = {}
+    local last = require("util.session").get()
+    if last then
+        table.insert(keys, {
+            icon = " ",
+            key = "s",
+            desc = "Continue — " .. vim.fn.fnamemodify(last, ":t"),
+            action = function()
+                require("util.session").continue()
+            end,
+        })
+    end
+    vim.list_extend(keys, {
+        { icon = " ", key = "f", desc = "Find File", action = ":Telescope find_files" },
+        { icon = " ", key = "p", desc = "Projects", action = project_picker },
+        { icon = " ", key = "r", desc = "Recent Files", action = ":Telescope oldfiles" },
+        { icon = " ", key = "g", desc = "Find Text", action = ":Telescope live_grep" },
+        { icon = " ", key = "e", desc = "File Explorer", action = ":Neotree toggle right" },
+        {
+            icon = " ",
+            key = "c",
+            desc = "Config",
+            action = function()
+                require("telescope.builtin").find_files({ cwd = vim.fn.stdpath("config") })
+            end,
+        },
+        { icon = "󰒲 ", key = "L", desc = "Lazy", action = ":Lazy" },
+        { icon = " ", key = "m", desc = "Mason", action = ":Mason" },
+        { icon = " ", key = "q", desc = "Quit", action = ":qa" },
+    })
+    return keys
+end
+
 return {
     "folke/snacks.nvim",
     priority = 1000,
     lazy = false,
+    keys = {
+        { "<c-/>", function() Snacks.terminal.toggle() end, mode = { "n", "t" }, desc = "Toggle Terminal" },
+        { "<c-_>", function() Snacks.terminal.toggle() end, mode = { "n", "t" }, desc = "which_key_ignore" },
+    },
     opts = {
+        terminal = {},
         dashboard = {
             preset = {
                 header = [[
-███╗   ██╗███████╗ ██████╗ ██╗   ██╗██╗███╗   ███╗
-████╗  ██║██╔════╝██╔═══██╗██║   ██║██║████╗ ████║
-██╔██╗ ██║█████╗  ██║   ██║██║   ██║██║██╔████╔██║
-██║╚██╗██║██╔══╝  ██║   ██║╚██╗ ██╔╝██║██║╚██╔╝██║
-██║ ╚████║███████╗╚██████╔╝ ╚████╔╝ ██║██║ ╚═╝ ██║
-╚═╝  ╚═══╝╚══════╝ ╚═════╝   ╚═══╝  ╚═╝╚═╝     ╚═╝
+ ██████╗ █████╗ ███████╗██╗  ██╗███████╗██████╗  ██╗███╗   ██╗ ██████╗
+██╔════╝██╔══██╗██╔════╝██║  ██║██╔════╝██╔══██╗███║████╗  ██║██╔═══██╗
+██║     ███████║███████╗███████║█████╗  ██████╔╝╚██║██╔██╗ ██║██║   ██║
+██║     ██╔══██║╚════██║██╔══██║██╔══╝  ██╔══██╗ ██║██║╚██╗██║██║   ██║
+╚██████╗██║  ██║███████║██║  ██║███████╗██║  ██║ ██║██║ ╚████║╚██████╔╝
+ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝
                 ]],
-                keys = {
-                    { icon = " ", key = "f", desc = "Find File", action = ":Telescope find_files" },
-                    { icon = " ", key = "p", desc = "Projects", action = project_picker },
-                    { icon = " ", key = "r", desc = "Recent Files", action = ":Telescope oldfiles" },
-                    { icon = " ", key = "g", desc = "Find Text", action = ":Telescope live_grep" },
-                    { icon = " ", key = "e", desc = "File Explorer", action = ":Neotree toggle right" },
-                    {
-                        icon = " ",
-                        key = "c",
-                        desc = "Config",
-                        action = function()
-                            require("telescope.builtin").find_files({ cwd = vim.fn.stdpath("config") })
-                        end,
-                    },
-                    { icon = "󰒲 ", key = "L", desc = "Lazy", action = ":Lazy" },
-                    { icon = " ", key = "m", desc = "Mason", action = ":Mason" },
-                    { icon = " ", key = "q", desc = "Quit", action = ":qa" },
-                },
+                keys = dashboard_keys(),
             },
             sections = {
                 { section = "header" },

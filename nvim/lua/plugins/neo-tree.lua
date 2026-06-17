@@ -6,8 +6,23 @@ return {
         "nvim-tree/nvim-web-devicons",
         "MunifTanjim/nui.nvim",
     },
+    cmd = "Neotree", -- also load when invoked as :Neotree (e.g. from the dashboard)
     keys = {
-        { "<leader>e", "<cmd>Neotree toggle right<cr>", desc = "Toggle file explorer" },
+        {
+            "<leader>e",
+            function()
+                -- Smart toggle:
+                --   closed            -> open + focus
+                --   open, not focused -> focus it
+                --   open + focused    -> close it
+                if vim.bo.filetype == "neo-tree" then
+                    vim.cmd("Neotree close")
+                else
+                    vim.cmd("Neotree focus right")
+                end
+            end,
+            desc = "Toggle/focus file explorer",
+        },
         { "<leader>o", "<cmd>Neotree focus right<cr>", desc = "Focus file explorer" },
     },
     opts = {
@@ -27,11 +42,17 @@ return {
                     cc.open(state)
                 end
             end,
+            -- Return focus to the previously focused (code) window, leaving the
+            -- explorer open.
+            focus_previous_window = function()
+                vim.cmd("wincmd p")
+            end,
         },
         window = {
             position = "right",
             width = 35,
             mappings = {
+                ["<esc>"] = "focus_previous_window",
                 ["<cr>"] = "toggle_or_recursive_collapse",
                 ["<2-LeftMouse>"] = "toggle_or_recursive_collapse", -- double-click
                 ["o"] = "toggle_or_recursive_collapse",
