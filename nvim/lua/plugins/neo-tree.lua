@@ -77,6 +77,9 @@ return {
             filtered_items = {
                 hide_dotfiles = false,
                 hide_gitignored = false,
+                -- Hide Unity's .meta sidecar files. Still revealable with "H"
+                -- (toggle_hidden) since they're hidden, not never_show.
+                hide_by_pattern = { "*.meta" },
             },
         },
     },

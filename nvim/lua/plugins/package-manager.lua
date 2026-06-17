@@ -29,6 +29,7 @@ return {
                 "angularls",     -- Angular templates
                 "pyright",       -- Python
                 "jdtls",         -- Java
+                "roslyn_ls",     -- C# (installs the `roslyn-language-server` package; started by roslyn.nvim)
             },
             -- We register and enable the servers ourselves in plugins/lsp.lua
             -- (with our custom configs in lua/lsp/), so don't let

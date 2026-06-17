@@ -1,5 +1,5 @@
--- Telescope picker over the folders in ~/Projects. Selecting one cd's into it
--- and opens a file finder scoped to that project.
+-- Telescope picker over the folders in the projects root (see util.projects).
+-- Selecting one cd's into it and opens a file finder scoped to that project.
 local function project_picker()
     local pickers = require("telescope.pickers")
     local finders = require("telescope.finders")
@@ -7,7 +7,7 @@ local function project_picker()
     local actions = require("telescope.actions")
     local action_state = require("telescope.actions.state")
 
-    local root = vim.fn.expand("~/Projects")
+    local root = require("util.projects").root()
     local dirs = {}
     for name, type in vim.fs.dir(root) do
         if type == "directory" and not name:match("^%.") then

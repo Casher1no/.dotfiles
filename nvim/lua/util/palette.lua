@@ -14,9 +14,10 @@ M.categories = {
         name = "Projects",
         icon = "",
         -- Rebuilt each time the palette opens (see M.open). Lists folders in
-        -- ~/Projects; selecting one cd's in and opens a file finder there.
+        -- the projects root (see util.projects); selecting one cd's in and
+        -- opens a file finder there.
         dynamic = function()
-            local root = vim.fn.expand("~/Projects")
+            local root = require("util.projects").root()
             local items = {}
             for name, type in vim.fs.dir(root) do
                 if type == "directory" and not name:match("^%.") then

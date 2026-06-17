@@ -62,6 +62,9 @@ return {
             },
             sorting_strategy = "ascending", -- best match directly under the prompt
             path_display = { "truncate" },
+            -- Hide Unity's .meta sidecar files from every picker (find_files,
+            -- live_grep, grep_string, …). Lua patterns, matched against the path.
+            file_ignore_patterns = { "%.meta$" },
             mappings = {
                 i = {
                     ["<C-j>"] = "move_selection_next",

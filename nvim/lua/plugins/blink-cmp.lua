@@ -15,10 +15,11 @@ return {
             menu = {
                 auto_show = true, -- pop up automatically as you type
                 draw = {
-                    -- icon column + label, no plain "Field/Method" text
+                    -- icon + label, with the kind name ("Method", "Field", …) on the right
                     columns = {
                         { "kind_icon" },
                         { "label", "label_description", gap = 1 },
+                        { "kind", gap = 1 },
                     },
                 },
             },
