@@ -110,6 +110,7 @@ M.categories = {
             { desc = "Recent files (this project)", keys = "<leader>fp" },
             { desc = "Help tags", keys = "<leader>fh", cmd = "Telescope help_tags" },
             { desc = "Search word under cursor", keys = "<leader>fw", cmd = "Telescope grep_string" },
+            { desc = "Find TODOs", keys = "<leader>ft", cmd = "TodoTelescope" },
         },
     },
     {
@@ -207,6 +208,9 @@ M.categories = {
             { desc = "Buffer-local keymaps (which-key)", keys = "<leader>?" },
             { desc = "This palette", keys = "<leader><space>" },
             { desc = "Run project task", keys = "<leader>r" },
+            { desc = "Comment line", keys = "gcc" },
+            { desc = "Comment selection (visual)", keys = "gc" },
+            { desc = "Comment a motion (e.g. gcap)", keys = "gc{motion}" },
         },
     },
 }
