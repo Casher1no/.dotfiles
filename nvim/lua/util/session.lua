@@ -47,6 +47,14 @@ function M.continue()
         return
     end
     vim.schedule(function()
+        -- Snacks only auto-closes the dashboard when it's a float (ours isn't),
+        -- so dismiss it explicitly — otherwise the restored session opens behind
+        -- the dashboard and nothing appears to happen.
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "snacks_dashboard" then
+                pcall(vim.api.nvim_buf_delete, buf, { force = true })
+            end
+        end
         vim.cmd("cd " .. vim.fn.fnameescape(dir))
         require("persistence").load()
     end)

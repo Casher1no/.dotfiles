@@ -45,6 +45,8 @@ return {
         { "<leader>fp", project_recent_files, desc = "Recent files (this project, max 12)" },
         { "<leader>fh", "<cmd>Telescope help_tags<cr>", desc = "Help tags" },
         { "<leader>fw", "<cmd>Telescope grep_string<cr>", desc = "Search word under cursor" },
+        -- Changed/added/removed files with a diff preview underneath.
+        { "<leader>gs", "<cmd>Telescope git_status<cr>", desc = "Git changes (status + diff)" },
     },
     opts = {
         defaults = {

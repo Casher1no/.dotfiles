@@ -116,6 +116,7 @@ M.categories = {
         name = "Git",
         icon = "",
         items = {
+            { desc = "Changed files + diff", keys = "<leader>gs", cmd = "Telescope git_status" },
             { desc = "Next hunk", keys = "]h" },
             { desc = "Previous hunk", keys = "[h" },
             { desc = "Preview hunk", keys = "<leader>hp" },
