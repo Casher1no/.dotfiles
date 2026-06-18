@@ -78,7 +78,7 @@ vim.keymap.set("n", "<leader>r", function()
 end, { desc = "Run project task" })
 
 -- Terminal: let <C-w> window motions work straight from terminal-insert mode
--- so you can jump out of terminals (e.g. Claude Code) without first pressing
+-- so you can jump out of terminals without first pressing
 -- <C-\><C-n>. Esc stays untouched for terminal TUIs.
 vim.keymap.set("t", "<C-w>h", [[<C-\><C-n><C-w>h]], { desc = "Go to left window" })
 vim.keymap.set("t", "<C-w>j", [[<C-\><C-n><C-w>j]], { desc = "Go to lower window" })

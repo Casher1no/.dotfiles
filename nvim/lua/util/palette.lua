@@ -77,21 +77,6 @@ M.categories = {
         items = {},
     },
     {
-        name = "Claude Code",
-        icon = "󰚩",
-        items = {
-            { desc = "Toggle Claude", keys = "<leader>ac", cmd = "ClaudeCode" },
-            { desc = "Focus Claude", keys = "<leader>af", cmd = "ClaudeCodeFocus" },
-            { desc = "Resume session", keys = "<leader>ar", cmd = "ClaudeCode --resume" },
-            { desc = "Continue session", keys = "<leader>aC", cmd = "ClaudeCode --continue" },
-            { desc = "Select model", keys = "<leader>am", cmd = "ClaudeCodeSelectModel" },
-            { desc = "Add current buffer", keys = "<leader>ab", cmd = "ClaudeCodeAdd %" },
-            { desc = "Send selection / add file", keys = "<leader>as", cmd = "ClaudeCodeSend" },
-            { desc = "Accept diff", keys = "<leader>aa", cmd = "ClaudeCodeDiffAccept" },
-            { desc = "Deny diff", keys = "<leader>ad", cmd = "ClaudeCodeDiffDeny" },
-        },
-    },
-    {
         name = "Explorer",
         icon = "",
         items = {

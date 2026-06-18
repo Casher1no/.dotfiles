@@ -1,5 +1,5 @@
--- Auto-reload: pull in changes made on disk by external tools (Claude Code,
--- Unity's asset pipeline, git, …). autoread only swaps the buffer in when it
+-- Auto-reload: pull in changes made on disk by external tools (Unity's asset
+-- pipeline, git, …). autoread only swaps the buffer in when it
 -- has no unsaved changes — the auto-save below keeps buffers clean so this can
 -- almost always reload silently instead of throwing the W12 conflict prompt.
 vim.opt.autoread = true
