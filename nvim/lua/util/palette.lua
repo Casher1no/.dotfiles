@@ -265,6 +265,10 @@ M.categories = {
                     require("telescope.builtin").lsp_document_symbols()
                 end,
             },
+            {
+                desc = "Restart LSP (fix stale/wrong diagnostics)",
+                cmd = "LspRestart",
+            },
             { desc = "Hover docs", keys = "K" },
             { desc = "Code action", keys = "<leader>ca" },
             { desc = "Rename symbol", keys = "<leader>rn" },
