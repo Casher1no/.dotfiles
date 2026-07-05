@@ -29,6 +29,7 @@ return {
     },
     keys = {
         { "<leader>b", function() require("dap").toggle_breakpoint() end, desc = "Debug: toggle breakpoint" },
+        { "<F9>", function() require("dap").toggle_breakpoint() end, desc = "Debug: toggle breakpoint" },
         {
             "<leader>B",
             function()
@@ -36,6 +37,7 @@ return {
             end,
             desc = "Debug: conditional breakpoint",
         },
+        { "<leader>bc", function() require("dap").clear_breakpoints() end, desc = "Debug: clear all breakpoints" },
         { "<F5>", function() require("dap").continue() end, desc = "Debug: start/continue" },
         { "<S-F5>", function() require("dap").terminate() end, desc = "Debug: terminate" },
         { "<F10>", function() require("dap").step_over() end, desc = "Debug: step over" },
@@ -79,6 +81,37 @@ return {
                 end,
             },
         }
+
+        -- Unity: attach to the Editor's Play Mode process via the Mono soft
+        -- debugger, using the adapter bundled with the "Visual Studio Tools
+        -- for Unity" VS Code extension (a separate debugger backend from
+        -- coreclr/netcoredbg, which can't attach to Unity's Mono runtime).
+        -- Only the adapter itself is registered here — the actual "Attach to
+        -- Unity" configuration comes from the project's own
+        -- .vscode/launch.json, which nvim-dap reads automatically; adding our
+        -- own copy here would just duplicate that entry in the picker.
+        if require("util.unity").is_unity_project() then
+            local extension_dirs =
+                vim.fn.glob(vim.fn.expand("~/.vscode/extensions/visualstudiotoolsforunity.vstuc-*"), false, true)
+            table.sort(extension_dirs)
+            local vstuc_dir = extension_dirs[#extension_dirs]
+
+            if vstuc_dir then
+                dap.adapters.vstuc = {
+                    type = "executable",
+                    command = "dotnet",
+                    args = { "UnityDebugAdapter.dll" },
+                    options = { cwd = vstuc_dir .. "/bin" },
+                }
+            else
+                vim.notify(
+                    "Unity project detected but no visualstudiotoolsforunity.vstuc-* extension found under "
+                        .. "~/.vscode/extensions — install \"Visual Studio Tools for Unity\" in VS Code once to "
+                        .. "get the debug adapter binary.",
+                    vim.log.levels.WARN
+                )
+            end
+        end
 
         -- PHP: listen for incoming Xdebug 3 connections (default port 9003).
         dap.configurations.php = {

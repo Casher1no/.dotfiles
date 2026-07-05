@@ -15,6 +15,11 @@ return {
                     "oxocarbon",
                     "onedark",
                     "rose-pine",
+                    "everforest",
+                    "cyberdream",
+                    "vscode",
+                    "dracula",
+                    "nord",
                 },
                 livePreview = true,
             })
@@ -54,5 +59,25 @@ return {
         config = function()
             vim.cmd.colorscheme("catppuccin")
         end,
+    },
+    {
+        "neanias/everforest-nvim",
+        lazy = false,
+    },
+    {
+        "scottmckendry/cyberdream.nvim",
+        lazy = false,
+    },
+    {
+        "Mofiqul/vscode.nvim",
+        lazy = false,
+    },
+    {
+        "Mofiqul/dracula.nvim",
+        lazy = false,
+    },
+    {
+        "gbprod/nord.nvim",
+        lazy = false,
     },
 }

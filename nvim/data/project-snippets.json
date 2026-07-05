@@ -1,0 +1,18 @@
+{
+  "*": [
+    {
+      "name": "TODO",
+      "prefix": "td",
+      "ext": "",
+      "body": ["// TODO:"]
+    }
+  ],
+  "The Inheritance": [
+    {
+      "name": "Construct",
+      "prefix": "ct",
+      "ext": "cs",
+      "body": ["[Inject]", "private void Construct()", "{", "}"]
+    }
+  ]
+}

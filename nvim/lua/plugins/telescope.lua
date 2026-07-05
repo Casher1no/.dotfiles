@@ -48,37 +48,50 @@ return {
         -- Changed/added/removed files with a diff preview underneath.
         { "<leader>gs", "<cmd>Telescope git_status<cr>", desc = "Git changes (status + diff)" },
     },
-    opts = {
-        defaults = {
-            -- JetBrains "Search Everywhere" look:
-            -- prompt + file list on top, content preview on the bottom.
-            layout_strategy = "vertical",
-            layout_config = {
-                vertical = {
-                    prompt_position = "top",
-                    mirror = true, -- results above preview
-                    preview_height = 0.5,
-                    width = 0.9,
-                    height = 0.9,
+    opts = function()
+        -- Hide Unity's .meta sidecar files from every picker (find_files,
+        -- live_grep, grep_string, …). Lua patterns, matched against the path.
+        local file_ignore_patterns = { "%.meta$" }
+        if require("util.unity").is_unity_project() then
+            -- Prefabs/scenes/assets are huge serialized YAML blobs, not code —
+            -- searching them just buries real matches under noise.
+            vim.list_extend(file_ignore_patterns, {
+                "%.prefab$",
+                "%.unity$",
+                "%.asset$",
+            })
+        end
+
+        return {
+            defaults = {
+                -- JetBrains "Search Everywhere" look:
+                -- prompt + file list on top, content preview on the bottom.
+                layout_strategy = "vertical",
+                layout_config = {
+                    vertical = {
+                        prompt_position = "top",
+                        mirror = true, -- results above preview
+                        preview_height = 0.5,
+                        width = 0.9,
+                        height = 0.9,
+                    },
+                },
+                sorting_strategy = "ascending", -- best match directly under the prompt
+                path_display = { "truncate" },
+                file_ignore_patterns = file_ignore_patterns,
+                mappings = {
+                    i = {
+                        ["<C-j>"] = "move_selection_next",
+                        ["<C-k>"] = "move_selection_previous",
+                        ["<Esc>"] = "close", -- single Esc closes
+                    },
                 },
             },
-            sorting_strategy = "ascending", -- best match directly under the prompt
-            path_display = { "truncate" },
-            -- Hide Unity's .meta sidecar files from every picker (find_files,
-            -- live_grep, grep_string, …). Lua patterns, matched against the path.
-            file_ignore_patterns = { "%.meta$" },
-            mappings = {
-                i = {
-                    ["<C-j>"] = "move_selection_next",
-                    ["<C-k>"] = "move_selection_previous",
-                    ["<Esc>"] = "close", -- single Esc closes
+            pickers = {
+                find_files = {
+                    hidden = true, -- show dotfiles
                 },
             },
-        },
-        pickers = {
-            find_files = {
-                hidden = true, -- show dotfiles
-            },
-        },
-    },
+        }
+    end,
 }

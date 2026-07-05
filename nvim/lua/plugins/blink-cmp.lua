@@ -31,7 +31,30 @@ return {
             trigger = { show_on_keyword = true },
         },
         sources = {
-            default = { "lsp", "path", "snippets", "buffer" },
+            -- "project_snippets" serves this project's custom snippets (see
+            -- util/project_snippets.lua), filtered by file extension.
+            --
+            -- C# drops "buffer": Unity method names like OnDrawGizmos are
+            -- real overrides in plenty of other scripts, so blink's buffer
+            -- source (which scans all loaded buffers, not just this one)
+            -- kept surfacing them a second time as a plain-word match
+            -- alongside the actual snippet entry.
+            default = function(ctx)
+                -- blink calls this without a ctx from some internal paths
+                -- (e.g. computing trigger characters) — fall back to the
+                -- current buffer rather than indexing a nil ctx.
+                local bufnr = (ctx and ctx.bufnr) or vim.api.nvim_get_current_buf()
+                if vim.bo[bufnr].filetype == "cs" then
+                    return { "lsp", "path", "snippets", "project_snippets" }
+                end
+                return { "lsp", "path", "snippets", "buffer", "project_snippets" }
+            end,
+            providers = {
+                project_snippets = {
+                    name = "Project",
+                    module = "util.project_blink_source",
+                },
+            },
         },
         -- falls back to a Lua matcher if the prebuilt binary is unavailable
         fuzzy = { implementation = "prefer_rust_with_warning" },

@@ -47,6 +47,16 @@ return {
             focus_previous_window = function()
                 vim.cmd("wincmd p")
             end,
+            -- Create a new file from a template. Offers only the templates
+            -- for whatever stack the project is (Unity C#, Laravel/PHP,
+            -- Angular, Vue, Python, ...) — see util/templates/init.lua.
+            add_template = function(state)
+                local node = state.tree:get_node()
+                local dir = (node.type == "directory") and node.path or vim.fn.fnamemodify(node.path, ":h")
+                require("util.templates").create_interactive(dir, function()
+                    require("neo-tree.sources.manager").refresh(state.name)
+                end)
+            end,
         },
         window = {
             position = "right",
@@ -62,6 +72,7 @@ return {
                 ["S"] = "open_split",
                 ["P"] = { "toggle_preview", config = { use_float = true } },
                 ["a"] = "add",
+                ["A"] = "add_template",
                 ["d"] = "delete",
                 ["r"] = "rename",
                 ["y"] = "copy_to_clipboard",
@@ -84,6 +95,37 @@ return {
         },
     },
     config = function(_, opts)
+        if require("util.unity").is_unity_project() then
+            opts.filesystem.filtered_items = vim.tbl_deep_extend("force", opts.filesystem.filtered_items, {
+                never_show = {
+                    ".vs",
+                    "Library",
+                    "library",
+                    "Obj",
+                    "obj",
+                    "Logs",
+                    "logs",
+                    "ProjectSettings",
+                    "UserSettings",
+                    "Temp",
+                    "temp",
+                    "build",
+                    "Build",
+                },
+                never_show_by_pattern = {
+                    "*.booproj",
+                    "*.pidb",
+                    "*.suo",
+                    "*.user",
+                    "*.userprefs",
+                    "*.unityproj",
+                    "*.vsconfig",
+                    "*.dll",
+                    "*.pdf",
+                },
+            })
+        end
+
         require("neo-tree").setup(opts)
         -- Mouse must be on for clicking the tree
         vim.opt.mouse = "a"

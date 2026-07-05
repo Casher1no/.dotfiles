@@ -77,11 +77,89 @@ M.categories = {
         items = {},
     },
     {
+        name = "Snippets",
+        icon = "",
+        -- Custom per-project snippets (see util/project_snippets.lua), keyed
+        -- by project folder name so they persist across a `git pull` of this
+        -- repo on any machine. Not tied to any language — each snippet has
+        -- an optional file extension filter (blank = shows in every file).
+        dynamic = function()
+            local snippets = require("util.project_snippets")
+            local reopen = function()
+                vim.schedule(function()
+                    require("util.palette").open()
+                end)
+            end
+            local items = {}
+            items[#items + 1] = {
+                desc = "＋ Add project snippet…",
+                action = function()
+                    snippets.add_project_interactive(reopen)
+                end,
+            }
+            items[#items + 1] = {
+                desc = "＋ Add global snippet…",
+                action = function()
+                    snippets.add_global_interactive(reopen)
+                end,
+            }
+            items[#items + 1] = {
+                desc = "✎ Edit snippet…",
+                action = function()
+                    snippets.edit_interactive(reopen)
+                end,
+            }
+            items[#items + 1] = {
+                desc = "－ Remove snippet…",
+                action = function()
+                    snippets.remove_interactive(reopen)
+                end,
+            }
+
+            local project_entries, global_entries = {}, {}
+            for _, e in ipairs(snippets.list()) do
+                table.insert(e.scope == snippets.GLOBAL_KEY and global_entries or project_entries, e)
+            end
+            local function entry_item(e)
+                return { desc = e.name, keys = e.prefix .. (e.ext ~= "" and (" (." .. e.ext .. ")") or "") }
+            end
+
+            items[#items + 1] = { desc = "Project Snippets", section = true }
+            if #project_entries == 0 then
+                items[#items + 1] = { desc = "(none)" }
+            else
+                for _, e in ipairs(project_entries) do
+                    items[#items + 1] = entry_item(e)
+                end
+            end
+
+            items[#items + 1] = { desc = "Global Snippets", section = true }
+            if #global_entries == 0 then
+                items[#items + 1] = { desc = "(none)" }
+            else
+                for _, e in ipairs(global_entries) do
+                    items[#items + 1] = entry_item(e)
+                end
+            end
+
+            return items
+        end,
+        items = {},
+    },
+    {
         name = "Explorer",
         icon = "",
         items = {
             { desc = "Toggle / focus explorer", keys = "<leader>e", cmd = "Neotree focus right" },
             { desc = "Focus explorer", keys = "<leader>o", cmd = "Neotree focus right" },
+            {
+                desc = "New file from template (current buffer's folder)",
+                keys = "A (in explorer)",
+                action = function()
+                    local dir = vim.fn.expand("%:p:h")
+                    require("util.templates").create_interactive(dir)
+                end,
+            },
         },
     },
     {
@@ -127,6 +205,9 @@ M.categories = {
             { desc = "Go to right window", keys = "<leader>wl", cmd = "wincmd l" },
             { desc = "Focus next window", keys = "<leader>nb", cmd = "wincmd w" },
             { desc = "Focus previous window", keys = "<leader>pb", cmd = "wincmd W" },
+            { desc = "Toggle centered view", keys = "<leader>zz" },
+            { desc = "Smooth scroll up half page", keys = "<S-Up>" },
+            { desc = "Smooth scroll down half page", keys = "<S-Down>" },
         },
     },
     {
@@ -140,7 +221,19 @@ M.categories = {
             end
         end,
         items = (function()
-            local names = { "catppuccin", "kanagawa-wave", "gruvbox", "oxocarbon", "onedark", "rose-pine" }
+            local names = {
+                "catppuccin",
+                "kanagawa-wave",
+                "gruvbox",
+                "oxocarbon",
+                "onedark",
+                "rose-pine",
+                "everforest",
+                "cyberdream",
+                "vscode",
+                "dracula",
+                "nord",
+            }
             local items = {}
             for _, name in ipairs(names) do
                 items[#items + 1] = {
@@ -165,7 +258,13 @@ M.categories = {
             { desc = "Find references / usages", keys = "gr" },
             { desc = "Incoming calls (who calls this)", keys = "<leader>ci" },
             { desc = "Outgoing calls (what this calls)", keys = "<leader>co" },
-            { desc = "Document symbols", keys = "gs" },
+            {
+                desc = "Document symbols (methods, vars, …)",
+                keys = "gs",
+                action = function()
+                    require("telescope.builtin").lsp_document_symbols()
+                end,
+            },
             { desc = "Hover docs", keys = "K" },
             { desc = "Code action", keys = "<leader>ca" },
             { desc = "Rename symbol", keys = "<leader>rn" },
@@ -175,8 +274,9 @@ M.categories = {
         name = "Debug",
         icon = "",
         items = {
-            { desc = "Toggle breakpoint", keys = "<leader>b", action = function() require("dap").toggle_breakpoint() end },
+            { desc = "Toggle breakpoint", keys = "<leader>b / <F9>", action = function() require("dap").toggle_breakpoint() end },
             { desc = "Conditional breakpoint", keys = "<leader>B" },
+            { desc = "Clear all breakpoints", keys = "<leader>bc", action = function() require("dap").clear_breakpoints() end },
             { desc = "Start / Continue", keys = "<F5>", action = function() require("dap").continue() end },
             { desc = "Step over", keys = "<F10>", action = function() require("dap").step_over() end },
             { desc = "Step into", keys = "<F11>", action = function() require("dap").step_into() end },
@@ -192,10 +292,13 @@ M.categories = {
         items = {
             { desc = "Buffer-local keymaps (which-key)", keys = "<leader>?" },
             { desc = "This palette", keys = "<leader><space>" },
+            { desc = "Clear search highlight", keys = "<Esc>u" },
             { desc = "Run project task", keys = "<leader>r" },
             { desc = "Comment line", keys = "gcc" },
             { desc = "Comment selection (visual)", keys = "gc" },
             { desc = "Comment a motion (e.g. gcap)", keys = "gc{motion}" },
+            { desc = "Move selection down", keys = "J / <A-Down> (visual)" },
+            { desc = "Move selection up", keys = "K / <A-Up> (visual)" },
         },
     },
 }
@@ -234,14 +337,28 @@ local function render_right()
     local lines, width = {}, RIGHT_W
     table.insert(lines, "  " .. (cat.icon or "") .. " " .. cat.name)
     table.insert(lines, "")
+    -- Maps a rendered line number to the item that produced it (nil for
+    -- header/blank/section lines) — needed because section titles take a
+    -- variable number of lines, so line number no longer maps to
+    -- cat.items[line - 2] by fixed arithmetic.
+    local line_map = {}
     for _, item in ipairs(cat.items) do
-        local keys = item.keys or ""
-        local pad = width - 4 - #item.desc - #keys
-        if pad < 1 then
-            pad = 1
+        if item.section then
+            -- A non-actionable section title (e.g. "Project Snippets"), not
+            -- a runnable item — no keys column, blank line above for spacing.
+            table.insert(lines, "")
+            table.insert(lines, "  " .. item.desc)
+        else
+            local keys = item.keys or ""
+            local pad = width - 4 - #item.desc - #keys
+            if pad < 1 then
+                pad = 1
+            end
+            table.insert(lines, "  " .. item.desc .. string.rep(" ", pad) .. keys)
+            line_map[#lines] = item
         end
-        table.insert(lines, "  " .. item.desc .. string.rep(" ", pad) .. keys)
     end
+    state.line_map = line_map
     vim.bo[state.act_buf].modifiable = true
     vim.api.nvim_buf_set_lines(state.act_buf, 0, -1, false, lines)
     vim.bo[state.act_buf].modifiable = false
@@ -260,9 +377,7 @@ end
 
 -- Run the action on the given right-pane line (1-based, including header rows).
 local function run_action(line)
-    local cat = M.categories[state.selected]
-    local idx = line - 2 -- two header lines
-    local item = cat.items[idx]
+    local item = state.line_map[line]
     -- Mark confirmed so close() keeps a previewed theme instead of reverting.
     if item then
         state.confirmed = true
@@ -338,7 +453,7 @@ function M.open()
                 return
             end
             local line = vim.api.nvim_win_get_cursor(state.act_win)[1]
-            local item = cat.items[line - 2]
+            local item = state.line_map[line]
             if item then
                 cat.on_focus(item)
             end

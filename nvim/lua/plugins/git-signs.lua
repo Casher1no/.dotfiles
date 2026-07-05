@@ -4,6 +4,7 @@ return {
     opts = {
         -- Gutter signs for changed lines (enabled)
         signcolumn = true,
+        attach_to_untracked = false,
         -- Off by default — toggle live with the keymaps below
         word_diff = false, -- highlight the exact changed words within a line
         numhl = false, -- highlight the line number
@@ -23,6 +24,16 @@ return {
             untracked = { text = "▎" },
         },
         on_attach = function(bufnr)
+            -- Skip signs entirely for files with no commit history yet — a
+            -- freshly `git add`ed new file is still "tracked", so
+            -- attach_to_untracked above won't catch it, but every line would
+            -- show as added (diffed against a HEAD that lacks the file).
+            local filepath = vim.api.nvim_buf_get_name(bufnr)
+            local log = vim.fn.systemlist({ "git", "log", "-1", "--", filepath })
+            if vim.v.shell_error == 0 and #log == 0 then
+                return false
+            end
+
             local gs = require("gitsigns")
             local function map(mode, l, r, desc)
                 vim.keymap.set(mode, l, r, { buffer = bufnr, desc = desc })

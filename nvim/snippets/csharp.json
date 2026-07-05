@@ -1,0 +1,94 @@
+{
+    "Unity Awake": {
+        "prefix": "Awake",
+        "body": ["private void Awake()", "{", "\t$0", "}"]
+    },
+    "Unity OnEnable": {
+        "prefix": "OnEnable",
+        "body": ["private void OnEnable()", "{", "\t$0", "}"]
+    },
+    "Unity Start": {
+        "prefix": "Start",
+        "body": ["private void Start()", "{", "\t$0", "}"]
+    },
+    "Unity FixedUpdate": {
+        "prefix": "FixedUpdate",
+        "body": ["private void FixedUpdate()", "{", "\t$0", "}"]
+    },
+    "Unity Update": {
+        "prefix": "Update",
+        "body": ["private void Update()", "{", "\t$0", "}"]
+    },
+    "Unity LateUpdate": {
+        "prefix": "LateUpdate",
+        "body": ["private void LateUpdate()", "{", "\t$0", "}"]
+    },
+    "Unity OnDisable": {
+        "prefix": "OnDisable",
+        "body": ["private void OnDisable()", "{", "\t$0", "}"]
+    },
+    "Unity OnDestroy": {
+        "prefix": "OnDestroy",
+        "body": ["private void OnDestroy()", "{", "\t$0", "}"]
+    },
+    "Unity OnValidate": {
+        "prefix": "OnValidate",
+        "body": ["private void OnValidate()", "{", "\t$0", "}"]
+    },
+    "Unity Reset": {
+        "prefix": "Reset",
+        "body": ["private void Reset()", "{", "\t$0", "}"]
+    },
+    "Unity OnDrawGizmos": {
+        "prefix": "OnDrawGizmos",
+        "body": ["private void OnDrawGizmos()", "{", "\t$0", "}"]
+    },
+    "Unity OnDrawGizmosSelected": {
+        "prefix": "OnDrawGizmosSelected",
+        "body": ["private void OnDrawGizmosSelected()", "{", "\t$0", "}"]
+    },
+    "Unity OnCollisionEnter": {
+        "prefix": "OnCollisionEnter",
+        "body": ["private void OnCollisionEnter(Collision collision)", "{", "\t$0", "}"]
+    },
+    "Unity OnCollisionStay": {
+        "prefix": "OnCollisionStay",
+        "body": ["private void OnCollisionStay(Collision collision)", "{", "\t$0", "}"]
+    },
+    "Unity OnCollisionExit": {
+        "prefix": "OnCollisionExit",
+        "body": ["private void OnCollisionExit(Collision collision)", "{", "\t$0", "}"]
+    },
+    "Unity OnTriggerEnter": {
+        "prefix": "OnTriggerEnter",
+        "body": ["private void OnTriggerEnter(Collider other)", "{", "\t$0", "}"]
+    },
+    "Unity OnTriggerStay": {
+        "prefix": "OnTriggerStay",
+        "body": ["private void OnTriggerStay(Collider other)", "{", "\t$0", "}"]
+    },
+    "Unity OnTriggerExit": {
+        "prefix": "OnTriggerExit",
+        "body": ["private void OnTriggerExit(Collider other)", "{", "\t$0", "}"]
+    },
+    "Unity OnMouseDown": {
+        "prefix": "OnMouseDown",
+        "body": ["private void OnMouseDown()", "{", "\t$0", "}"]
+    },
+    "Unity OnApplicationQuit": {
+        "prefix": "OnApplicationQuit",
+        "body": ["private void OnApplicationQuit()", "{", "\t$0", "}"]
+    },
+    "Unity OnApplicationPause": {
+        "prefix": "OnApplicationPause",
+        "body": ["private void OnApplicationPause(bool pauseStatus)", "{", "\t$0", "}"]
+    },
+    "Unity OnApplicationFocus": {
+        "prefix": "OnApplicationFocus",
+        "body": ["private void OnApplicationFocus(bool hasFocus)", "{", "\t$0", "}"]
+    },
+    "Unity OnGUI": {
+        "prefix": "OnGUI",
+        "body": ["private void OnGUI()", "{", "\t$0", "}"]
+    }
+}

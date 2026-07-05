@@ -1,3 +1,5 @@
+vim.opt.termguicolors = true
+
 vim.cmd("set expandtab")
 vim.cmd("set tabstop=4")
 vim.cmd("set softtabstop=4")
@@ -9,7 +11,7 @@ vim.cmd("set cursorline")
 vim.opt.scrolloff = 10
 
 vim.opt.number = true
-vim.opt.signcolumn = "number"
+vim.opt.signcolumn = "yes:1"
 vim.opt.colorcolumn = "120"
 
 -- What persistence.nvim stores in a session (buffers, layout, cwd, …)
@@ -29,6 +31,8 @@ vim.keymap.set("v", "<C-c>", '"+y', { desc = "Copy to clipboard" })
 
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })
+vim.keymap.set("v", "<A-Down>", ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
+vim.keymap.set("v", "<A-Up>", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })
 
 vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
 vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
@@ -55,6 +59,9 @@ vim.keymap.set("n", "<leader>wh", "<C-w>h", { desc = "Go to left window" })
 vim.keymap.set("n", "<leader>wj", "<C-w>j", { desc = "Go to lower window" })
 vim.keymap.set("n", "<leader>wk", "<C-w>k", { desc = "Go to upper window" })
 vim.keymap.set("n", "<leader>wl", "<C-w>l", { desc = "Go to right window" })
+
+-- Clear search highlight
+vim.keymap.set("n", "<Esc>u", ":nohlsearch<CR>", { desc = "Clear search highlight" })
 
 -- Delete without yanking
 vim.keymap.set("n", "d", '"_d', { noremap = true })
