@@ -15,25 +15,51 @@ M.categories = {
         icon = "",
         -- Rebuilt each time the palette opens (see M.open). Lists folders in
         -- the projects root (see util.projects); selecting one cd's in and
-        -- opens a file finder there.
+        -- opens a file finder there. Favorited projects (see util.favorites)
+        -- are shown first, marked with ★. Press `f` on a project to toggle its
+        -- favorite state.
         dynamic = function()
             local root = require("util.projects").root()
-            local items = {}
+            local favorites = require("util.favorites")
+            local favs, rest = {}, {}
             for name, type in vim.fs.dir(root) do
                 if type == "directory" and not name:match("^%.") then
                     local path = root .. "/" .. name
-                    items[#items + 1] = {
-                        desc = name,
+                    local is_fav = favorites.is_favorite(name)
+                    local item = {
+                        desc = (is_fav and "★ " or "") .. name,
+                        keys = "f",
+                        project = name, -- used by the `f` toggle in M.open
                         action = function()
+                            -- Avoid landing in a no-neck-pain padding window
+                            -- when centered view is on (see util.projects).
+                            require("util.projects").focus_content_window()
                             vim.cmd("cd " .. vim.fn.fnameescape(path))
                             require("telescope.builtin").find_files({ cwd = path })
                         end,
                     }
+                    table.insert(is_fav and favs or rest, item)
                 end
             end
-            table.sort(items, function(a, b)
-                return a.desc < b.desc
-            end)
+            local function by_project(a, b)
+                return a.project < b.project
+            end
+            table.sort(favs, by_project)
+            table.sort(rest, by_project)
+
+            local items = {}
+            if #favs > 0 then
+                items[#items + 1] = { desc = "Favorites  (f: toggle)", section = true }
+                for _, it in ipairs(favs) do
+                    items[#items + 1] = it
+                end
+                items[#items + 1] = { desc = "All Projects", section = true }
+            else
+                items[#items + 1] = { desc = "All Projects  (f: favorite)", section = true }
+            end
+            for _, it in ipairs(rest) do
+                items[#items + 1] = it
+            end
             return items
         end,
         items = {},
@@ -496,6 +522,22 @@ function M.open()
     -- Right pane: <CR> runs the focused action; h/<Left> goes back to categories.
     map(state.act_buf, "<CR>", function()
         run_action(vim.api.nvim_win_get_cursor(state.act_win)[1])
+    end)
+
+    -- `f` toggles the focused project as a favorite (Projects category only),
+    -- then rebuilds the list in place so favorites re-sort to the top.
+    map(state.act_buf, "f", function()
+        local line = vim.api.nvim_win_get_cursor(state.act_win)[1]
+        local item = state.line_map[line]
+        if not (item and item.project) then
+            return
+        end
+        require("util.favorites").toggle(item.project)
+        local cat = M.categories[state.selected]
+        if cat.dynamic then
+            cat.items = cat.dynamic()
+        end
+        render_right()
     end)
     for _, lhs in ipairs({ "h", "<Left>", "<S-Tab>" }) do
         map(state.act_buf, lhs, function()

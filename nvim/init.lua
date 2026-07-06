@@ -20,3 +20,27 @@ local opts = {}
 require("vim-options")
 require("config.autocmds")
 require("lazy").setup("plugins")
+
+-- better-php-sense: custom PHP LSP
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'php',
+  callback = function(args)
+    vim.lsp.start({
+      name = 'better-php-sense',
+      cmd = { 'php', '/Users/maikls/Projects/better-php-sense/bin/server.php' },
+      root_dir = vim.fs.dirname(
+        vim.fs.find({ 'composer.json', '.git' }, { path = args.file, upward = true })[1]
+      ),
+    })
+  end,
+})
+
+-- handy keymaps for PHP buffers
+vim.api.nvim_create_autocmd('LspAttach', {
+  callback = function(args)
+    local opts = { buffer = args.buf }
+    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts) -- code actions
+    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)      -- rename
+    vim.keymap.set('n', '<leader>f',  vim.lsp.buf.format, opts)      -- format
+  end,
+})
