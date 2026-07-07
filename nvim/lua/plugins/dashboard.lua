@@ -84,6 +84,12 @@ return {
     },
     opts = {
         terminal = {},
+        -- Back vim.ui.select with a real picker (used by <leader>r project
+        -- tasks). Without this Neovim falls back to inputlist(), whose typed
+        -- digits noice's cmdline popup swallows — input works but is invisible.
+        picker = { ui_select = true },
+        -- Floating prompt for vim.ui.input (task name / shell command).
+        input = {},
         dashboard = {
             preset = {
                 header = [[
