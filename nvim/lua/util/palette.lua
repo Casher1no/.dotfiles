@@ -292,8 +292,26 @@ M.categories = {
                 end,
             },
             {
+                -- `:lsp restart` with no args only restarts clients attached
+                -- to the *current* buffer, and errors if there are none. We
+                -- want a global "fix everything" restart regardless of which
+                -- buffer/client the cursor happens to be on.
                 desc = "Restart LSP (fix stale/wrong diagnostics)",
-                cmd = "LspRestart",
+                action = function()
+                    local names = {}
+                    local seen = {}
+                    for _, client in ipairs(vim.lsp.get_clients()) do
+                        if not seen[client.name] then
+                            seen[client.name] = true
+                            table.insert(names, client.name)
+                        end
+                    end
+                    if #names == 0 then
+                        vim.notify("No active LSP clients to restart", vim.log.levels.INFO)
+                        return
+                    end
+                    vim.cmd("lsp restart " .. table.concat(names, " "))
+                end,
             },
             { desc = "Hover docs", keys = "K" },
             { desc = "Code action", keys = "<leader>ca" },

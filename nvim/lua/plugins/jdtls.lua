@@ -76,7 +76,7 @@ return {
             local dir = workspace_for(vim.fs.root(0, root_markers))
             vim.fn.delete(dir, "rf")
             vim.notify("Wiped jdtls workspace: " .. dir .. "\nRestarting…", vim.log.levels.INFO)
-            vim.cmd("LspRestart jdtls")
+            vim.cmd("lsp restart jdtls")
         end, { desc = "Clear this project's jdtls workspace and restart" })
     end,
 }

@@ -41,6 +41,12 @@ vim.keymap.set("v", "<A-k>", ":m '<-2<CR>gv=gv", { desc = "Move selected lines u
 vim.keymap.set("v", "<A-Down>", ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
 vim.keymap.set("v", "<A-Up>", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })
 
+-- No selection: move just the current line.
+vim.keymap.set("n", "<A-j>", ":m .+1<CR>==", { desc = "Move current line down" })
+vim.keymap.set("n", "<A-k>", ":m .-2<CR>==", { desc = "Move current line up" })
+vim.keymap.set("n", "<A-Down>", ":m .+1<CR>==", { desc = "Move current line down" })
+vim.keymap.set("n", "<A-Up>", ":m .-2<CR>==", { desc = "Move current line up" })
+
 vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
 vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
 
