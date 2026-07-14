@@ -63,3 +63,63 @@ vim.api.nvim_create_autocmd("BufEnter", {
 		end
 	end,
 })
+
+-- C# uses Allman style (opening brace on its own line), unlike the K&R style
+-- mini.pairs' default `{}` pairing assumes. When `{` is typed at the end of a
+-- statement (if/foreach/method/class/...), push it onto a new line with a
+-- blank indented line and the matching `}` below, instead of pairing inline.
+local function cs_allman_open_brace()
+	local ok_pairs, MiniPairs = pcall(require, "mini.pairs")
+	local function default_open()
+		if ok_pairs then
+			vim.api.nvim_feedkeys(MiniPairs.open("{}", "^[^\\]"), "n", true)
+		else
+			vim.api.nvim_feedkeys("{", "n", true)
+		end
+	end
+
+	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+	local line = vim.api.nvim_get_current_line()
+	local before = line:sub(1, col)
+	local after = line:sub(col + 1)
+
+	-- Only expand when `{` closes off a fresh statement: something before
+	-- it, nothing but trailing whitespace after (not a mid-line initializer
+	-- like `new() { ... }` or an interpolated string `$"{expr}"`).
+	if before:match("^%s*$") or after:match("%S") then
+		default_open()
+		return
+	end
+
+	local ts_ok, node = pcall(vim.treesitter.get_node, { pos = { row - 1, math.max(col - 1, 0) } })
+	if ts_ok and node then
+		local node_type = node:type()
+		if node_type:find("comment") or node_type:find("string") then
+			default_open()
+			return
+		end
+	end
+
+	local indent = line:match("^%s*")
+	local shiftwidth = vim.bo.shiftwidth > 0 and vim.bo.shiftwidth or vim.bo.tabstop
+	local inner_indent = vim.bo.expandtab and (indent .. string.rep(" ", shiftwidth)) or (indent .. "\t")
+
+	vim.api.nvim_buf_set_lines(0, row - 1, row, false, {
+		before,
+		indent .. "{",
+		inner_indent,
+		indent .. "}",
+	})
+	vim.api.nvim_win_set_cursor(0, { row + 2, #inner_indent })
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = "cs",
+	group = vim.api.nvim_create_augroup("cs_allman_braces", { clear = true }),
+	callback = function(args)
+		vim.keymap.set("i", "{", cs_allman_open_brace, {
+			buffer = args.buf,
+			desc = "Open brace on a new line, Allman-style (C#)",
+		})
+	end,
+})
