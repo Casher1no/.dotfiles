@@ -73,8 +73,25 @@ vim.keymap.set("n", "<leader>wj", "<C-w>j", { desc = "Go to lower window" })
 vim.keymap.set("n", "<leader>wk", "<C-w>k", { desc = "Go to upper window" })
 vim.keymap.set("n", "<leader>wl", "<C-w>l", { desc = "Go to right window" })
 
--- Clear search highlight
-vim.keymap.set("n", "<Esc>u", ":nohlsearch<CR>", { desc = "Clear search highlight" })
+-- AI inline edit on the visual selection, or the current line when pressed
+-- in normal mode (see util/ai/inline.lua)
+vim.keymap.set({ "x", "n" }, "<leader>cp", function()
+    require("util.ai.inline").edit()
+end, { desc = "AI edit selection / current line" })
+
+-- Claude Code: left-side terminal + quick context references (util/ai/claude.lua)
+vim.keymap.set("n", "<leader>cc", function()
+    require("util.ai.claude").toggle()
+end, { desc = "Toggle Claude Code" })
+vim.keymap.set("n", "<leader>cf", function()
+    require("util.ai.claude").add_file()
+end, { desc = "Add current file to Claude Code" })
+vim.keymap.set({ "x", "n" }, "<leader>cl", function()
+    require("util.ai.claude").add_lines()
+end, { desc = "Add line(s) to Claude Code" })
+
+-- Esc also clears search highlight (and still behaves as Esc)
+vim.keymap.set({ "n", "i" }, "<Esc>", "<cmd>nohlsearch<CR><Esc>", { desc = "Escape and clear search highlight" })
 
 -- Delete without yanking
 vim.keymap.set("n", "d", '"_d', { noremap = true })
