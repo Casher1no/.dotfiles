@@ -103,113 +103,25 @@ M.categories = {
         items = {},
     },
     {
-        name = "AI",
+        name = "Claude Code",
         icon = "",
-        -- Local-LLM features backed by LM Studio (see util/ai/*). Server
-        -- status and the model list come from a cache that refreshes async;
-        -- the palette re-renders in place when the answer arrives, so
-        -- opening this section never blocks.
-        dynamic = function()
-            local client = require("util.ai.client")
-            local config = require("util.ai.config")
-            local completion = require("util.ai.completion")
-            local cfg = config.get()
-            local reopen = function()
-                vim.schedule(function()
-                    require("util.palette").open("AI")
-                end)
-            end
-
-            if vim.uv.now() - client.status.fetched_at > 10000 then
-                client.models(function()
-                    require("util.palette").refresh()
-                end)
-            end
-
-            local items = {}
-            local online = client.status.online
-            if online == nil then
-                items[#items + 1] = { desc = "Checking LM Studio server…", section = true }
-            elseif online == false then
-                items[#items + 1] = { desc = "LM Studio server: offline", section = true }
-                items[#items + 1] = {
-                    desc = "▶ Start LM Studio server",
-                    action = function()
-                        vim.notify("Starting LM Studio server…", vim.log.levels.INFO)
-                        vim.system(
-                            { vim.fn.expand("~/.lmstudio/bin/lms"), "server", "start" },
-                            { text = true },
-                            function(res)
-                                vim.schedule(function()
-                                    if res.code == 0 then
-                                        vim.notify("LM Studio server started", vim.log.levels.INFO)
-                                        require("util.ai.client").models()
-                                    else
-                                        -- With the app missing, lms explains
-                                        -- itself — surface that as-is.
-                                        local err = vim.trim((res.stderr or "") .. " " .. (res.stdout or ""))
-                                        vim.notify("Could not start LM Studio: " .. err, vim.log.levels.WARN)
-                                    end
-                                end)
-                            end
-                        )
-                    end,
-                }
-            else
-                items[#items + 1] = { desc = "LM Studio: online", section = true }
-            end
-
-            items[#items + 1] = {
-                desc = (completion.is_enabled() and "◉" or "○") .. " Autocomplete: " .. (completion.is_enabled() and "on" or "off"),
-                keys = "Tab accepts",
-                action = function()
-                    completion.toggle()
-                    reopen()
-                end,
-            }
-            items[#items + 1] = {
-                desc = "Open AI chat",
-                action = function()
-                    require("util.ai.chat").toggle()
-                end,
-            }
-            items[#items + 1] = { desc = "AI edit selection / line", keys = "<leader>cp" }
-
-            items[#items + 1] = { desc = "Claude Code", section = true }
-            items[#items + 1] = {
+        items = {
+            {
                 desc = "Toggle Claude Code (left panel)",
                 keys = "<leader>cc",
                 action = function()
                     require("util.ai.claude").toggle()
                 end,
-            }
-            items[#items + 1] = {
+            },
+            {
                 desc = "Add current file to prompt",
                 keys = "<leader>cf",
                 action = function()
                     require("util.ai.claude").add_file()
                 end,
-            }
-            items[#items + 1] = { desc = "Add selection / line to prompt", keys = "<leader>cl" }
-
-            if online then
-                items[#items + 1] = { desc = "Models (Enter = use)", section = true }
-                if #client.status.models == 0 then
-                    items[#items + 1] = { desc = "(none downloaded — run: lms get <model>)" }
-                end
-                for _, id in ipairs(client.status.models) do
-                    items[#items + 1] = {
-                        desc = (id == cfg.model and "● " or "  ") .. id,
-                        action = function()
-                            config.set("model", id)
-                            reopen()
-                        end,
-                    }
-                end
-            end
-            return items
-        end,
-        items = {},
+            },
+            { desc = "Add selection / line to prompt", keys = "<leader>cl" },
+        },
     },
     {
         name = "Snippets",

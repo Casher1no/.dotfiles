@@ -20,7 +20,6 @@ local opts = {}
 require("vim-options")
 require("config.autocmds")
 require("lazy").setup("plugins")
-require("util.ai").setup()
 
 -- better-php-sense: custom PHP LSP
 vim.api.nvim_create_autocmd('FileType', {

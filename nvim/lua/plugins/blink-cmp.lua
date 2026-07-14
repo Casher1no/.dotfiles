@@ -6,16 +6,7 @@ return {
         keymap = {
             -- JetBrains-like: Enter and Tab accept, arrows / C-n / C-p navigate
             preset = "enter",
-            -- Tab first accepts a blink menu item; with the menu closed it
-            -- accepts AI ghost text (see util/ai/completion.lua, true =
-            -- consumed); otherwise it falls back to a literal tab.
-            ["<Tab>"] = {
-                "accept",
-                function()
-                    return require("util.ai.completion").accept()
-                end,
-                "fallback",
-            },
+            ["<Tab>"] = { "accept", "fallback" },
         },
         appearance = {
             nerd_font_variant = "mono", -- match most Nerd Fonts
