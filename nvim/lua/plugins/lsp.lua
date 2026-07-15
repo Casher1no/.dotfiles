@@ -41,8 +41,12 @@ return {
 
                 local opts = { buffer = bufnr, silent = true }
 
-                -- Hover and signature help
-                vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+                -- Hover and signature help. K is diagnostics-aware: on a
+                -- problem line it shows the error first, K again shows docs
+                -- (see util/hover.lua).
+                vim.keymap.set("n", "K", function()
+                    require("util.hover").show()
+                end, opts)
                 vim.keymap.set("i", "<C-k>", vim.lsp.buf.signature_help, opts)
 
                 -- Navigation (telescope pickers show a code preview alongside the list)

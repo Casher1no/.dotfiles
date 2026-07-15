@@ -84,8 +84,13 @@ vim.keymap.set({ "x", "n" }, "<leader>cl", function()
     require("util.ai.claude").add_lines()
 end, { desc = "Add line(s) to Claude Code" })
 
--- Esc also clears search highlight (and still behaves as Esc)
-vim.keymap.set({ "n", "i" }, "<Esc>", "<cmd>nohlsearch<CR><Esc>", { desc = "Escape and clear search highlight" })
+-- Esc also closes an open K popup (docs/error, see util/hover.lua) and
+-- clears search highlight
+vim.keymap.set("n", "<Esc>", function()
+    require("util.hover").close()
+    vim.cmd.nohlsearch()
+end, { desc = "Escape: close docs popup, clear search highlight" })
+vim.keymap.set("i", "<Esc>", "<cmd>nohlsearch<CR><Esc>", { desc = "Escape and clear search highlight" })
 
 -- Delete without yanking
 vim.keymap.set("n", "d", '"_d', { noremap = true })
