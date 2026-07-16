@@ -1,10 +1,12 @@
--- Debugging via nvim-dap. C# (netcoredbg) and PHP (Xdebug / vscode-php-debug)
--- are auto-configured here; Java is wired through nvim-jdtls (see plugins/jdtls.lua).
+-- Debugging via nvim-dap. C# (netcoredbg), PHP (Xdebug / vscode-php-debug)
+-- and Python (debugpy) are auto-configured here; Java is wired through
+-- nvim-jdtls (see plugins/jdtls.lua).
 return {
     "mfussenegger/nvim-dap",
     dependencies = {
         { "rcarriga/nvim-dap-ui", dependencies = { "nvim-neotest/nvim-nio" } },
         "theHamsta/nvim-dap-virtual-text",
+        "mfussenegger/nvim-dap-python",
         {
             "jay-babu/mason-nvim-dap.nvim",
             dependencies = "mason-org/mason.nvim",
@@ -15,6 +17,7 @@ return {
                     "php", -- PHP (vscode-php-debug / Xdebug)
                     "javadbg", -- java-debug-adapter (bundle for jdtls)
                     "javatest", -- vscode-java-test (bundle for jdtls)
+                    "python", -- debugpy
                 },
                 -- Let mason-nvim-dap auto-create adapters/configs for netcoredbg
                 -- and php. Java is handled by nvim-jdtls, not here.
@@ -23,6 +26,11 @@ return {
                     function(config)
                         require("mason-nvim-dap").default_setup(config)
                     end,
+                    -- Python is set up by nvim-dap-python below instead: it
+                    -- resolves the debugged program's interpreter from the
+                    -- project's .venv / $VIRTUAL_ENV, which the default
+                    -- handler doesn't.
+                    python = function() end,
                 },
             },
         },
@@ -112,6 +120,11 @@ return {
                 )
             end
         end
+
+        -- Python: debugpy (installed by mason above) runs the adapter; the
+        -- debugged program's interpreter comes from nvim-dap-python's
+        -- resolver ($VIRTUAL_ENV, then <cwd>/.venv, then system python).
+        require("dap-python").setup(vim.fn.stdpath("data") .. "/mason/packages/debugpy/venv/bin/python")
 
         -- PHP: listen for incoming Xdebug 3 connections (default port 9003).
         dap.configurations.php = {

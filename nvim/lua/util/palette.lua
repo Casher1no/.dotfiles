@@ -334,6 +334,13 @@ M.categories = {
                     vim.cmd("lsp restart " .. table.concat(names, " "))
                 end,
             },
+            {
+                desc = "Format file",
+                keys = "<leader>fc",
+                action = function()
+                    require("util.format").format()
+                end,
+            },
             { desc = "Hover docs / error (K again: docs)", keys = "K" },
             { desc = "Scroll docs popup (when open)", keys = "<S-Down> / <S-Up>" },
             { desc = "Scroll popup sideways", keys = "<S-Left> / <S-Right>" },
@@ -419,8 +426,12 @@ local function render_right()
     for _, item in ipairs(cat.items) do
         if item.section then
             -- A non-actionable section title (e.g. "Project Snippets"), not
-            -- a runnable item — no keys column, blank line above for spacing.
-            table.insert(lines, "")
+            -- a runnable item — no keys column, blank line above for spacing
+            -- (skipped for the first section, which already sits under the
+            -- header's blank line).
+            if #lines > 2 then
+                table.insert(lines, "")
+            end
             table.insert(lines, "  " .. item.desc)
         else
             local keys = item.keys or ""

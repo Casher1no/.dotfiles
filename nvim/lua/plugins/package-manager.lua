@@ -27,7 +27,8 @@ return {
                 "vue_ls",        -- Vue SFC (Inertia)
                 "vtsls",         -- TypeScript/JS (Vue + Angular)
                 "angularls",     -- Angular templates
-                "pyright",       -- Python
+                "pyright",       -- Python (types, hover, navigation)
+                "ruff",          -- Python lint + formatting
                 "jdtls",         -- Java
                 "roslyn_ls",     -- C# (installs the `roslyn-language-server` package; started by roslyn.nvim)
             },

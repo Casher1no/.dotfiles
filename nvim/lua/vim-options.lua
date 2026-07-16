@@ -73,6 +73,13 @@ vim.keymap.set("n", "<leader>wj", "<C-w>j", { desc = "Go to lower window" })
 vim.keymap.set("n", "<leader>wk", "<C-w>k", { desc = "Go to upper window" })
 vim.keymap.set("n", "<leader>wl", "<C-w>l", { desc = "Go to right window" })
 
+-- Format the current file via LSP (ruff, intelephense, ...); warns when no
+-- attached server can format (see util/format.lua). On fc, not bare f, so
+-- the <leader>f* telescope keys stay delay-free.
+vim.keymap.set("n", "<leader>fc", function()
+    require("util.format").format()
+end, { desc = "Format file" })
+
 -- Claude Code: left-side terminal + quick context references (util/ai/claude.lua)
 vim.keymap.set("n", "<leader>cc", function()
     require("util.ai.claude").toggle()

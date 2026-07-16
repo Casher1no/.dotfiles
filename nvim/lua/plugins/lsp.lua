@@ -10,6 +10,7 @@ return {
             "vtsls",
             "angularls",
             "pyright",
+            "ruff",
             -- jdtls is started by nvim-jdtls (see plugins/jdtls.lua), not here.
         }
 
@@ -78,12 +79,8 @@ return {
                 vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
                 vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
 
-                -- Formatting
-                if client:supports_method("textDocument/formatting") then
-                    vim.keymap.set("n", "<leader>f", function()
-                        vim.lsp.buf.format({ async = true })
-                    end, opts)
-                end
+                -- Formatting: global <leader>fc → util/format.lua (works for
+                -- every attached server, warns when none can format).
 
                 -- Diagnostics
                 vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, opts)
@@ -94,7 +91,9 @@ return {
         })
 
         vim.diagnostic.config({
-            virtual_text = true,
+            -- Hints ("context is not accessed") stay out of the inline
+            -- virtual text — they still dim the symbol and show on K.
+            virtual_text = { severity = { min = vim.diagnostic.severity.WARN } },
             severity_sort = true,
         })
     end,

@@ -21,6 +21,28 @@ end
 return {
     cmd = { "pyright-langserver", "--stdio" },
     filetypes = { "python" },
+    -- Analyze with the project's virtualenv, not the system python:
+    -- $VIRTUAL_ENV when nvim was started inside one, else <root>/.venv
+    -- (the pip/uv/poetry default). Without this, imports installed in the
+    -- venv show as "could not be resolved".
+    before_init = function(_, config)
+        local python
+        if vim.env.VIRTUAL_ENV then
+            python = vim.env.VIRTUAL_ENV .. "/bin/python"
+        else
+            local candidate = (config.root_dir or vim.fn.getcwd()) .. "/.venv/bin/python"
+            if vim.uv.fs_stat(candidate) then
+                python = candidate
+            end
+        end
+        if python then
+            -- Mutate in place: the client already references this settings
+            -- table, so replacing it (tbl_deep_extend) would be invisible.
+            config.settings = config.settings or {}
+            config.settings.python = config.settings.python or {}
+            config.settings.python.pythonPath = python
+        end
+    end,
     root_markers = {
         "pyrightconfig.json",
         "pyproject.toml",
@@ -36,6 +58,21 @@ return {
                 autoSearchPaths = true,
                 useLibraryCodeForTypes = true,
                 diagnosticMode = "openFilesOnly",
+                -- PyCharm-level strictness: keep real problems (undefined
+                -- names, broken imports, bad calls) but drop pyright's
+                -- strict-Optional checks ('"reply_text" is not a known
+                -- attribute of "None"') that PyCharm doesn't flag either.
+                -- Delete an override (or set typeCheckingMode = "strict")
+                -- to get the pedantry back.
+                typeCheckingMode = "basic",
+                diagnosticSeverityOverrides = {
+                    reportOptionalMemberAccess = "none",
+                    reportOptionalCall = "none",
+                    reportOptionalSubscript = "none",
+                    reportOptionalOperand = "none",
+                    reportOptionalIterable = "none",
+                    reportArgumentType = "none",
+                },
             },
         },
     },

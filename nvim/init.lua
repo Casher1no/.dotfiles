@@ -41,6 +41,6 @@ vim.api.nvim_create_autocmd('LspAttach', {
     local opts = { buffer = args.buf }
     vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts) -- code actions
     vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)      -- rename
-    vim.keymap.set('n', '<leader>f',  vim.lsp.buf.format, opts)      -- format
+    -- format lives on the global <leader>fc (see util/format.lua)
   end,
 })
