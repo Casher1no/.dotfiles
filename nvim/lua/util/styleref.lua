@@ -47,7 +47,9 @@ end
 -- rg --vimgrep, results into the quickfix list: 0 hits → notify, 1 hit →
 -- jump straight there, many → telescope quickfix picker (:copen fallback).
 local function search(pattern, globs, title)
-    local cmd = { "rg", "--vimgrep", pattern }
+    -- -e keeps patterns that start with "--" (CSS custom properties) from
+    -- being parsed as rg flags.
+    local cmd = { "rg", "--vimgrep", "-e", pattern }
     for _, g in ipairs(globs or {}) do
         table.insert(cmd, "--glob")
         table.insert(cmd, g)
@@ -85,6 +87,41 @@ local function rg_escape(s)
     return s:gsub("([%.%[%]%(%)%{%}%*%+%?%^%$%|\\])", "\\%1")
 end
 
+local CSS_VAR_FT = vim.tbl_extend("force", {}, STYLESHEET_FT, {
+    vue = true, -- <style> blocks
+    html = true,
+    htmlangular = true,
+})
+
+-- CSS custom properties: gd on `var(--name)` jumps to the `--name:`
+-- definition; gd on the definition itself lists the var(--name) usages —
+-- the same toggle as regular gd. Returns false when the cursor isn't on
+-- a --name word.
+function M.css_var()
+    if not CSS_VAR_FT[vim.bo.filetype] then
+        return false
+    end
+    local word, s, line = word_at_cursor()
+    if not word or not word:match("^%-%-") then
+        return false
+    end
+    local name = rg_escape(word)
+    if line:sub(s + #word):match("^%s*:") then
+        -- Cursor is on the definition — show where it's used.
+        search(("var\\(\\s*%s([^\\w-]|\\))"):format(name), nil, "Usages of " .. word)
+    else
+        search(name .. "\\s*:", {
+            "*.css",
+            "*.scss",
+            "*.sass",
+            "*.less",
+            "*.vue",
+            "*.html",
+        }, "Definition of " .. word)
+    end
+    return true
+end
+
 -- In a stylesheet, on a class/id selector: find usages everywhere.
 -- Returns false when not applicable (caller falls back to LSP references).
 function M.references()
@@ -94,6 +131,9 @@ function M.references()
     local word, s, line = word_at_cursor()
     if not word then
         return false
+    end
+    if word:match("^%-%-") then
+        return M.css_var() -- gr on a custom property: same usage search
     end
     local sigil = line:sub(s - 1, s - 1)
     if sigil ~= "." and sigil ~= "#" then

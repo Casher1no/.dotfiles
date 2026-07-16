@@ -14,6 +14,9 @@ function M.definition()
         end
     end
     local styleref = require("util.styleref")
+    if styleref.css_var() then
+        return -- var(--x) → definition; on the definition → usages
+    end
     if styleref.definition() then
         return
     end
