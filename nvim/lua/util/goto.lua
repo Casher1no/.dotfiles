@@ -45,8 +45,9 @@ function M.definition()
             local uri = loc.uri or loc.targetUri
             local range = loc.range or loc.targetSelectionRange
             if uri == cur_uri and range and row >= range.start.line and row <= range["end"].line then
-                -- Already at the definition — show where it's used instead.
-                tb.lsp_references()
+                -- Already at the definition — show where it's used instead
+                -- (grouped picker: current file first, deduped).
+                require("util.references").open()
                 return
             end
         end

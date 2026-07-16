@@ -65,12 +65,13 @@ return {
                 vim.keymap.set("n", "gi", tb.lsp_implementations, opts)
                 vim.keymap.set("n", "go", tb.lsp_type_definitions, opts)
                 -- gr in a stylesheet on .class/#id finds usages across
-                -- templates + styles (util/styleref.lua); otherwise LSP refs.
+                -- templates (util/styleref.lua); otherwise the grouped
+                -- references picker (util/references.lua).
                 vim.keymap.set("n", "gr", function()
                     if require("util.styleref").references() then
                         return
                     end
-                    tb.lsp_references()
+                    require("util.references").open()
                 end, opts)
                 vim.keymap.set("n", "gs", tb.lsp_document_symbols, opts)
 
