@@ -298,7 +298,8 @@ M.categories = {
         name = "LSP / Code",
         icon = "",
         items = {
-            { desc = "Go to definition", keys = "gd" },
+            { desc = "Go to definition (on def: references)", keys = "gd" },
+            { desc = "Class usages / definition (styles)", keys = "gd / gr" },
             { desc = "Go to declaration", keys = "gD" },
             { desc = "Go to implementations", keys = "gi" },
             { desc = "Go to type definition", keys = "go" },
@@ -345,7 +346,7 @@ M.categories = {
             { desc = "Scroll docs popup (when open)", keys = "<S-Down> / <S-Up>" },
             { desc = "Scroll popup sideways", keys = "<S-Left> / <S-Right>" },
             { desc = "Code action", keys = "<leader>ca" },
-            { desc = "Rename symbol", keys = "<leader>rn" },
+            { desc = "Rename symbol", keys = "F2 / <leader>rn" },
         },
     },
     {

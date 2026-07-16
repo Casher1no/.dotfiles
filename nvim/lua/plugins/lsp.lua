@@ -11,6 +11,9 @@ return {
             "angularls",
             "pyright",
             "ruff",
+            "html",
+            "cssls",
+            "somesass_ls",
             -- jdtls is started by nvim-jdtls (see plugins/jdtls.lua), not here.
         }
 
@@ -52,22 +55,23 @@ return {
 
                 -- Navigation (telescope pickers show a code preview alongside the list)
                 local tb = require("telescope.builtin")
-                -- gd is Inertia-aware in PHP: on an Inertia::render('Page') string it
-                -- jumps to the page's .vue file, otherwise normal LSP definition.
+                -- gd is JetBrains-style: usage → definition, definition →
+                -- references. Also Inertia-aware in PHP and class-aware in
+                -- templates/stylesheets. See util/goto.lua.
                 vim.keymap.set("n", "gd", function()
-                    if vim.bo.filetype == "php" then
-                        local page = require("util.inertia").page_file_under_cursor()
-                        if page then
-                            vim.cmd("edit " .. vim.fn.fnameescape(page))
-                            return
-                        end
-                    end
-                    tb.lsp_definitions()
+                    require("util.goto").definition()
                 end, opts)
                 vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
                 vim.keymap.set("n", "gi", tb.lsp_implementations, opts)
                 vim.keymap.set("n", "go", tb.lsp_type_definitions, opts)
-                vim.keymap.set("n", "gr", tb.lsp_references, opts)
+                -- gr in a stylesheet on .class/#id finds usages across
+                -- templates + styles (util/styleref.lua); otherwise LSP refs.
+                vim.keymap.set("n", "gr", function()
+                    if require("util.styleref").references() then
+                        return
+                    end
+                    tb.lsp_references()
+                end, opts)
                 vim.keymap.set("n", "gs", tb.lsp_document_symbols, opts)
 
                 -- Call hierarchy: who calls this (incoming) / what it calls
@@ -78,6 +82,7 @@ return {
                 -- Code actions and refactoring
                 vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
                 vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
+                vim.keymap.set("n", "<F2>", vim.lsp.buf.rename, opts)
 
                 -- Formatting: global <leader>fc → util/format.lua (works for
                 -- every attached server, warns when none can format).

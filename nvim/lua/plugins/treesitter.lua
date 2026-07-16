@@ -26,7 +26,9 @@ return {
             "java",
             "lua",
             "html",
+            "angular", -- htmlangular component templates
             "css",
+            "scss",
             "json",
             "yaml",
             "toml",

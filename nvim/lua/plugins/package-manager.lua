@@ -29,6 +29,9 @@ return {
                 "angularls",     -- Angular templates
                 "pyright",       -- Python (types, hover, navigation)
                 "ruff",          -- Python lint + formatting
+                "html",          -- HTML (tags, attributes, formatting)
+                "cssls",         -- CSS / SCSS / LESS (completion, validation)
+                "somesass_ls",   -- SCSS workspace defs/references
                 "jdtls",         -- Java
                 "roslyn_ls",     -- C# (installs the `roslyn-language-server` package; started by roslyn.nvim)
             },
