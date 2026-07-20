@@ -350,6 +350,71 @@ M.categories = {
         },
     },
     {
+        name = "Diagnostics",
+        icon = "",
+        -- Trouble panels (see plugins/trouble.lua). Toggles close the panel
+        -- if it's already open.
+        items = {
+            { desc = "Diagnostics (project)", keys = "<leader>xx", cmd = "Trouble diagnostics toggle" },
+            { desc = "Diagnostics (this file)", keys = "<leader>xX", cmd = "Trouble diagnostics toggle filter.buf=0" },
+            { desc = "Document symbols panel", keys = "<leader>xs", cmd = "Trouble symbols toggle focus=false" },
+            {
+                desc = "References / definitions panel",
+                keys = "<leader>xr",
+                cmd = "Trouble lsp toggle focus=false win.position=right",
+            },
+            { desc = "Quickfix list panel", keys = "<leader>xq", cmd = "Trouble qflist toggle" },
+            { desc = "TODO comments panel", keys = "<leader>xt", cmd = "Trouble todo toggle" },
+        },
+    },
+    {
+        name = "Tests",
+        icon = "",
+        -- Neotest (see plugins/neotest.lua). "Nearest" = the test the cursor
+        -- is in, so run those from the buffer rather than from here.
+        items = {
+            { desc = "Run nearest test", keys = "<leader>tt", action = function() require("neotest").run.run() end },
+            {
+                desc = "Run current file",
+                keys = "<leader>tf",
+                action = function()
+                    require("neotest").run.run(vim.fn.expand("%"))
+                end,
+            },
+            {
+                desc = "Debug nearest test",
+                keys = "<leader>tD",
+                action = function()
+                    require("neotest").run.run({ strategy = "dap" })
+                end,
+            },
+            { desc = "Stop running tests", keys = "<leader>tS", action = function() require("neotest").run.stop() end },
+            {
+                desc = "Toggle summary tree",
+                keys = "<leader>ts",
+                action = function()
+                    require("neotest").summary.toggle()
+                end,
+            },
+            {
+                desc = "Show test output",
+                keys = "<leader>to",
+                action = function()
+                    require("neotest").output.open({ enter = true, auto_close = true })
+                end,
+            },
+            {
+                desc = "Toggle output panel",
+                keys = "<leader>tO",
+                action = function()
+                    require("neotest").output_panel.toggle()
+                end,
+            },
+            { desc = "Next failed test", keys = "]f" },
+            { desc = "Previous failed test", keys = "[f" },
+        },
+    },
+    {
         name = "Debug",
         icon = "",
         items = {

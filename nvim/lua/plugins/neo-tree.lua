@@ -35,12 +35,18 @@ return {
                 if vim.bo.filetype == "neo-tree" then
                     vim.cmd("Neotree close")
                 else
-                    vim.cmd("Neotree focus right")
+                    require("util.focus_tree")()
                 end
             end,
             desc = "Toggle/focus file explorer",
         },
-        { "<leader>o", "<cmd>Neotree focus right<cr>", desc = "Focus file explorer" },
+        {
+            "<leader>o",
+            function()
+                require("util.focus_tree")()
+            end,
+            desc = "Focus file explorer",
+        },
     },
     opts = {
         close_if_last_window = true,
