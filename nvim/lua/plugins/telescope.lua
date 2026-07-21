@@ -32,7 +32,6 @@ return {
     -- deprecated vim.lsp.util.jump_to_location.
     dependencies = {
         "nvim-lua/plenary.nvim",
-        "nvim-tree/nvim-web-devicons",
     },
     cmd = "Telescope", -- also load when invoked as :Telescope (e.g. from the dashboard)
     keys = {

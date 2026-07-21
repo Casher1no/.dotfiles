@@ -20,7 +20,6 @@ return {
     branch = "v3.x",
     dependencies = {
         "nvim-lua/plenary.nvim",
-        "nvim-tree/nvim-web-devicons",
         "MunifTanjim/nui.nvim",
     },
     cmd = "Neotree", -- also load when invoked as :Neotree (e.g. from the dashboard)
@@ -52,6 +51,33 @@ return {
         close_if_last_window = true,
         enable_git_status = true,
         enable_diagnostics = true,
+        default_component_configs = {
+            icon = {
+                -- Neo-tree draws its own single-color folder glyph and only
+                -- asks the icon plugin about files. Route both through
+                -- mini.icons so folders get per-name icons and colors too
+                -- (src, test, .git, node_modules, …).
+                provider = function(icon, node)
+                    local ok, mini_icons = pcall(require, "mini.icons")
+                    if not ok then
+                        return
+                    end
+                    if node.type == "file" then
+                        local text, hl = mini_icons.get("file", node.name)
+                        icon.text = text
+                        icon.highlight = hl
+                    elseif node.type == "directory" then
+                        local text, hl = mini_icons.get("directory", node.name)
+                        icon.highlight = hl
+                        -- Keep neo-tree's open-folder glyph on expanded dirs
+                        -- so the open/closed state stays visible.
+                        if not node:is_expanded() then
+                            icon.text = text
+                        end
+                    end
+                end,
+            },
+        },
         commands = {
             -- Open files / expand folders, but when collapsing an already-expanded
             -- folder, recursively collapse everything inside it too. That way the

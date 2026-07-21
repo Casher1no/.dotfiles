@@ -1,7 +1,9 @@
 -- A small centered command palette for the keymaps defined by plugins in this
--- config. Two panes: categories on the left, that category's actions (with the
--- keys to press) on the right. <CR> runs the focused action and closes; the
--- left pane just selects which category the right pane shows.
+-- config. A search bar on top of two panes: categories on the left, that
+-- category's actions (with the keys to press) on the right. The search bar
+-- has focus when the palette opens — typing live-filters every action across
+-- all categories; ↑/↓ move (wrapping top ↔ bottom), <CR> runs the focused
+-- action and closes, <Esc> clears the query and then closes.
 --
 -- This list is curated by hand — keep it in sync with the keymaps in
 -- lua/plugins/*. It intentionally shows only *our* mappings, not Neovim's
@@ -458,6 +460,11 @@ local state = {
     cat_buf = nil,
     act_win = nil,
     act_buf = nil,
+    search_win = nil,
+    search_buf = nil,
+    query = "", -- current search bar text ("" = browse mode)
+    results = {}, -- flattened { item = ..., ci = category index } matches
+    result_idx = 1, -- selected entry in `results`
     orig_colorscheme = nil, -- restored if a theme preview isn't confirmed
     confirmed = false, -- set when an action is run via <CR>
 }
@@ -465,21 +472,37 @@ local state = {
 local LEFT_W = 24
 local RIGHT_W = 48
 local GAP = 1
+local SEARCH_NS = vim.api.nvim_create_namespace("palette_search")
 
 local function close()
+    -- Leave insert mode before the windows go away, so it doesn't leak into
+    -- whatever buffer regains focus.
+    vim.cmd("stopinsert")
     -- Undo a live theme preview unless the user actually selected one.
     if not state.confirmed and state.orig_colorscheme and vim.g.colors_name ~= state.orig_colorscheme then
         pcall(vim.cmd.colorscheme, state.orig_colorscheme)
     end
-    for _, w in ipairs({ state.act_win, state.cat_win }) do
+    for _, w in ipairs({ state.act_win, state.cat_win, state.search_win }) do
         if w and vim.api.nvim_win_is_valid(w) then
             vim.api.nvim_win_close(w, true)
         end
     end
-    state.cat_win, state.act_win = nil, nil
+    state.cat_win, state.act_win, state.search_win = nil, nil, nil
 end
 
-local function render_right()
+local function render_left()
+    local lines = {}
+    for i, cat in ipairs(M.categories) do
+        local marker = (i == state.selected) and "▶ " or "  "
+        table.insert(lines, marker .. (cat.icon or "") .. " " .. cat.name)
+    end
+    vim.bo[state.cat_buf].modifiable = true
+    vim.api.nvim_buf_set_lines(state.cat_buf, 0, -1, false, lines)
+    vim.bo[state.cat_buf].modifiable = false
+end
+
+-- Browse mode: the selected category's actions.
+local function render_browse()
     local cat = M.categories[state.selected]
     local lines, width = {}, RIGHT_W
     table.insert(lines, "  " .. (cat.icon or "") .. " " .. cat.name)
@@ -515,15 +538,70 @@ local function render_right()
     vim.bo[state.act_buf].modifiable = false
 end
 
-local function render_left()
-    local lines = {}
-    for i, cat in ipairs(M.categories) do
-        local marker = (i == state.selected) and "▶ " or "  "
-        table.insert(lines, marker .. (cat.icon or "") .. " " .. cat.name)
+-- Recompute state.results for the current query. An item matches when every
+-- whitespace-separated word of the query appears (case-insensitive) somewhere
+-- in its description, keys or category name. Section titles are skipped.
+local function update_search()
+    local words = {}
+    for w in state.query:lower():gmatch("%S+") do
+        words[#words + 1] = w
     end
-    vim.bo[state.cat_buf].modifiable = true
-    vim.api.nvim_buf_set_lines(state.cat_buf, 0, -1, false, lines)
-    vim.bo[state.cat_buf].modifiable = false
+    state.results = {}
+    for ci, cat in ipairs(M.categories) do
+        for _, item in ipairs(cat.items) do
+            if not item.section then
+                local hay = (item.desc .. " " .. (item.keys or "") .. " " .. cat.name):lower()
+                local ok = true
+                for _, w in ipairs(words) do
+                    if not hay:find(w, 1, true) then
+                        ok = false
+                        break
+                    end
+                end
+                if ok then
+                    state.results[#state.results + 1] = { item = item, ci = ci }
+                end
+            end
+        end
+    end
+    state.result_idx = 1
+end
+
+-- Search mode: flattened matches across all categories. The left pane
+-- follows along, marking the category the selected match comes from.
+local function render_search()
+    if #state.results > 0 then
+        state.selected = state.results[state.result_idx].ci
+    end
+    render_left()
+    local n = #state.results
+    local lines = { "  " .. n .. (n == 1 and " match" or " matches"), "" }
+    local line_map = {}
+    for i, r in ipairs(state.results) do
+        local marker = (i == state.result_idx) and "▶ " or "  "
+        local keys = r.item.keys or ""
+        local pad = RIGHT_W - 4 - #r.item.desc - #keys
+        if pad < 1 then
+            pad = 1
+        end
+        lines[#lines + 1] = marker .. r.item.desc .. string.rep(" ", pad) .. keys
+        line_map[#lines] = r.item
+    end
+    if n == 0 then
+        lines[#lines + 1] = "  (no matches)"
+    end
+    state.line_map = line_map
+    vim.bo[state.act_buf].modifiable = true
+    vim.api.nvim_buf_set_lines(state.act_buf, 0, -1, false, lines)
+    vim.bo[state.act_buf].modifiable = false
+end
+
+local function render_right()
+    if state.query ~= "" then
+        render_search()
+    else
+        render_browse()
+    end
 end
 
 -- Run the action on the given right-pane line (1-based, including header rows).
@@ -555,6 +633,9 @@ function M.refresh()
     if cat.dynamic then
         cat.items = cat.dynamic()
     end
+    if state.query ~= "" then
+        update_search()
+    end
     render_right()
 end
 
@@ -569,6 +650,9 @@ function M.open(category)
     end
     state.confirmed = false
     state.orig_colorscheme = vim.g.colors_name
+    state.query = ""
+    state.results = {}
+    state.result_idx = 1
 
     -- Refresh any categories whose contents are computed at open time.
     for _, cat in ipairs(M.categories) do
@@ -579,16 +663,18 @@ function M.open(category)
 
     local total_w = LEFT_W + GAP + RIGHT_W
     local height = math.max(#M.categories, 12) + 2
-    local row = math.floor((vim.o.lines - height) / 2 - 1)
+    -- +3 rows for the search bar (1 content + 2 border) above the panes.
+    local row = math.floor((vim.o.lines - height - 3) / 2 - 1)
     local col = math.floor((vim.o.columns - total_w) / 2)
 
     -- Left pane (categories)
     state.cat_buf = vim.api.nvim_create_buf(false, true)
-    state.cat_win = vim.api.nvim_open_win(state.cat_buf, true, {
+    vim.bo[state.cat_buf].bufhidden = "wipe"
+    state.cat_win = vim.api.nvim_open_win(state.cat_buf, false, {
         relative = "editor",
         width = LEFT_W,
         height = height,
-        row = row,
+        row = row + 3,
         col = col,
         style = "minimal",
         border = "rounded",
@@ -596,23 +682,74 @@ function M.open(category)
         title_pos = "center",
     })
 
-    vim.bo[state.cat_buf].bufhidden = "wipe"
-
-    -- Right pane (actions)
+    -- Right pane (actions / search results)
     state.act_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[state.act_buf].bufhidden = "wipe"
     state.act_win = vim.api.nvim_open_win(state.act_buf, false, {
         relative = "editor",
         width = RIGHT_W,
         height = height,
-        row = row,
+        row = row + 3,
         col = col + LEFT_W + GAP + 1,
         style = "minimal",
         border = "rounded",
     })
 
+    -- Search bar spanning both panes. It takes focus in insert mode, so
+    -- typing starts filtering immediately.
+    state.search_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[state.search_buf].bufhidden = "wipe"
+    -- Keep blink.cmp's completion menu out of the search bar — its Enter/Esc
+    -- mappings would swallow ours while the menu is open. blink's default
+    -- `enabled` check respects this per-buffer flag.
+    vim.b[state.search_buf].completion = false
+    state.search_win = vim.api.nvim_open_win(state.search_buf, true, {
+        relative = "editor",
+        width = total_w + 1,
+        height = 1,
+        row = row,
+        col = col,
+        style = "minimal",
+        border = "rounded",
+        title = " Search ",
+        title_pos = "center",
+    })
+
     render_left()
     render_right()
+    pcall(vim.api.nvim_win_set_cursor, state.cat_win, { state.selected, 0 })
+
+    -- Grey hint text while the search bar is empty.
+    local function update_hint()
+        vim.api.nvim_buf_clear_namespace(state.search_buf, SEARCH_NS, 0, -1)
+        if state.query == "" then
+            vim.api.nvim_buf_set_extmark(state.search_buf, SEARCH_NS, 0, 0, {
+                virt_text = { { "type to filter — ↑/↓ move, ⏎ run", "Comment" } },
+                virt_text_pos = "overlay",
+            })
+        end
+    end
+    update_hint()
+    vim.cmd("startinsert")
+
+    -- Live filter: any edit to the search bar re-renders the right pane.
+    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+        buffer = state.search_buf,
+        callback = function()
+            local text = vim.api.nvim_buf_get_lines(state.search_buf, 0, 1, false)[1] or ""
+            local q = vim.trim(text)
+            if q == state.query then
+                return
+            end
+            state.query = q
+            update_hint()
+            if q ~= "" then
+                update_search()
+            end
+            render_left()
+            render_right()
+        end,
+    })
 
     -- Fire the focused category's on_focus as the cursor moves in the right
     -- pane (used for live theme preview).
@@ -634,33 +771,56 @@ function M.open(category)
     local function map(buf, lhs, fn)
         vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, silent = true })
     end
+    local function imap(lhs, fn)
+        vim.keymap.set("i", lhs, fn, { buffer = state.search_buf, nowait = true, silent = true })
+    end
 
-    -- Left pane: j/k move category, <CR>/l/<Right>/<Tab> jumps into actions.
-    local function sync_from_cursor()
-        local l = vim.api.nvim_win_get_cursor(state.cat_win)[1]
-        state.selected = math.min(math.max(l, 1), #M.categories)
+    -- Category selection with wrap-around: up on the first wraps to the last
+    -- and down on the last wraps back to the first.
+    local function select_category(delta)
+        local n = #M.categories
+        state.selected = ((state.selected - 1 + delta) % n) + 1
+        pcall(vim.api.nvim_win_set_cursor, state.cat_win, { state.selected, 0 })
         render_left()
         render_right()
     end
-    local function move(dir)
-        return function()
-            vim.cmd("normal! " .. dir)
-            sync_from_cursor()
-        end
-    end
-    map(state.cat_buf, "j", move("j"))
-    map(state.cat_buf, "k", move("k"))
-    map(state.cat_buf, "<Down>", move("j"))
-    map(state.cat_buf, "<Up>", move("k"))
+
+    -- Left pane: j/k move category (wrapping), <CR>/l/<Right>/<Tab> jumps
+    -- into actions.
+    map(state.cat_buf, "j", function() select_category(1) end)
+    map(state.cat_buf, "k", function() select_category(-1) end)
+    map(state.cat_buf, "<Down>", function() select_category(1) end)
+    map(state.cat_buf, "<Up>", function() select_category(-1) end)
     local function enter_actions()
+        vim.cmd("stopinsert")
         vim.api.nvim_set_current_win(state.act_win)
-        vim.api.nvim_win_set_cursor(state.act_win, { 3, 0 }) -- first action
+        pcall(vim.api.nvim_win_set_cursor, state.act_win, { 3, 0 }) -- first action
     end
     for _, lhs in ipairs({ "<CR>", "l", "<Right>", "<Tab>" }) do
         map(state.cat_buf, lhs, enter_actions)
     end
 
-    -- Right pane: <CR> runs the focused action; h/<Left> goes back to categories.
+    -- Right pane: line-wise movement with wrap-around. Lines 1-2 are the
+    -- header, so wrapping lands on line 3 (the first entry).
+    local function act_move(delta)
+        return function()
+            local last = vim.api.nvim_buf_line_count(state.act_buf)
+            local cur = vim.api.nvim_win_get_cursor(state.act_win)[1]
+            local nxt = cur + delta
+            if nxt > last then
+                nxt = 3
+            elseif nxt < 3 then
+                nxt = last
+            end
+            pcall(vim.api.nvim_win_set_cursor, state.act_win, { math.min(nxt, last), 0 })
+        end
+    end
+    map(state.act_buf, "j", act_move(1))
+    map(state.act_buf, "k", act_move(-1))
+    map(state.act_buf, "<Down>", act_move(1))
+    map(state.act_buf, "<Up>", act_move(-1))
+
+    -- <CR> runs the focused action; h/<Left> goes back to categories.
     map(state.act_buf, "<CR>", function()
         run_action(vim.api.nvim_win_get_cursor(state.act_win)[1])
     end)
@@ -686,8 +846,63 @@ function M.open(category)
         end)
     end
 
-    -- Close from either pane.
+    -- Search bar: ↑/↓ move through categories (empty query) or matches, both
+    -- wrapping; <CR> runs the selected match; <Tab> moves focus to the panes;
+    -- <Esc> clears the query first, then closes.
+    local function search_nav(delta)
+        if state.query == "" then
+            select_category(delta)
+        elseif #state.results > 0 then
+            local n = #state.results
+            state.result_idx = ((state.result_idx - 1 + delta) % n) + 1
+            render_right()
+        end
+    end
+    imap("<Down>", function() search_nav(1) end)
+    imap("<Up>", function() search_nav(-1) end)
+    imap("<CR>", function()
+        if state.query == "" then
+            enter_actions()
+        elseif #state.results > 0 then
+            run_action(state.result_idx + 2) -- +2: header rows in the results pane
+        end
+    end)
+    imap("<Tab>", function()
+        vim.cmd("stopinsert")
+        if state.query == "" then
+            vim.api.nvim_set_current_win(state.cat_win)
+        else
+            vim.api.nvim_set_current_win(state.act_win)
+            pcall(vim.api.nvim_win_set_cursor, state.act_win, { state.result_idx + 2, 0 })
+        end
+    end)
+    imap("<Esc>", function()
+        if state.query == "" then
+            close()
+        else
+            -- First <Esc> clears the query; the guard in the TextChanged
+            -- autocmd keeps this from double-rendering.
+            state.query = ""
+            vim.api.nvim_buf_set_lines(state.search_buf, 0, -1, false, { "" })
+            update_hint()
+            render_left()
+            render_right()
+        end
+    end)
+    map(state.search_buf, "<Esc>", close)
+    map(state.search_buf, "q", close)
+    map(state.search_buf, "i", function()
+        vim.cmd("startinsert!")
+    end)
+
+    -- From the panes, `/` or `i` returns to the search bar; <Esc>/q close.
+    local function focus_search()
+        vim.api.nvim_set_current_win(state.search_win)
+        vim.cmd("startinsert!")
+    end
     for _, buf in ipairs({ state.cat_buf, state.act_buf }) do
+        map(buf, "/", focus_search)
+        map(buf, "i", focus_search)
         map(buf, "<Esc>", close)
         map(buf, "q", close)
     end
