@@ -33,6 +33,13 @@ return {
         add({ glyph = "󱧬", hl = "MiniIconsPurple" }, "controller", "controllers")
         add({ glyph = "󱂷", hl = "MiniIconsAzure" }, "type", "types", "interface", "interfaces", "contracts")
         add({ glyph = "󰪺", hl = "MiniIconsGrey" }, "cache", "tmp", "temp")
+        add({ glyph = "󰅩", hl = "MiniIconsBlue" }, "component", "components")
+        add({ glyph = "󰃭", hl = "MiniIconsYellow" }, "event", "events")
+        add({ glyph = "󰠮", hl = "MiniIconsGreen" }, "record", "records")
+        add({ glyph = "󰏗", hl = "MiniIconsOrange" }, "installer", "installers")
+        add({ glyph = "󰒓", hl = "MiniIconsCyan" }, "manager", "managers")
+        add({ glyph = "󰷈", hl = "MiniIconsPurple" }, "editor", "editors")
+        add({ glyph = "󰌌", hl = "MiniIconsRed" }, "input", "inputs")
         directory.DTO = directory.dto
         directory.DTOs = directory.dto
 
@@ -49,7 +56,7 @@ return {
         add({ glyph = "󰉐", hl = "MiniIconsRed" }, "secret", "secrets", "private")
         add({ glyph = "󰉌", hl = "MiniIconsBlue" }, "user", "users", "profile", "profiles", "account", "accounts")
         add({ glyph = "󰡰", hl = "MiniIconsPurple" }, "api", "network", "http", "connection")
-        add({ glyph = "󱂵", hl = "MiniIconsRed" }, "core", "main")
+        add({ glyph = "󰍛", hl = "MiniIconsBlue" }, "core", "main", "_Core")
         add({ glyph = "󰚝", hl = "MiniIconsYellow" }, "feature", "features", "module", "modules")
         add({ glyph = "󰴋", hl = "MiniIconsCyan" }, "migration", "migrations", "sync")
         add({ glyph = "󰷌", hl = "MiniIconsOrange" }, "notification", "notifications", "alerts")
