@@ -433,6 +433,16 @@ M.categories = {
         },
     },
     {
+        name = "Markdown",
+        icon = "",
+        -- render-markdown.nvim (see plugins/render-markdown.lua). Rendering
+        -- is on by default in markdown buffers; these toggle it.
+        items = {
+            { desc = "Toggle pretty rendering (all buffers)", cmd = "RenderMarkdown toggle" },
+            { desc = "Toggle for this buffer only", cmd = "RenderMarkdown buf_toggle" },
+        },
+    },
+    {
         name = "Help",
         icon = "",
         items = {
