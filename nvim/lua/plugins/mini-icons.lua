@@ -40,13 +40,17 @@ return {
         add({ glyph = "󰒓", hl = "MiniIconsCyan" }, "manager", "managers")
         add({ glyph = "󰷈", hl = "MiniIconsPurple" }, "editor", "editors")
         add({ glyph = "󰌌", hl = "MiniIconsRed" }, "input", "inputs")
+        add({ glyph = "󱂀", hl = "MiniIconsRed" }, "di", "injection")
         directory.DTO = directory.dto
         directory.DTOs = directory.dto
+        directory.DI = directory.di
 
         -- General purpose
         add({ glyph = "󱥾", hl = "MiniIconsGreen" }, "test", "tests", "spec", "specs", "__tests__")
         add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "helper", "helpers", "tools")
-        add({ glyph = "󱁽", hl = "MiniIconsGrey" }, "config", "configs", "settings", "conf")
+        add({ glyph = "󱁽", hl = "MiniIconsPurple" }, "config", "configs", "settings", "conf")
+        add({ glyph = "󰉕", hl = "MiniIconsGreen" }, "common", "commons", "shared")
+        add({ glyph = "󰲁", hl = "MiniIconsOrange" }, "webhook", "webhooks")
         add({ glyph = "󰲂", hl = "MiniIconsAzure" }, "doc", "docs")
         add({ glyph = "󰲃", hl = "MiniIconsGrey" }, "log", "logs")
         add({ glyph = "󰉓", hl = "MiniIconsBlue" }, "asset", "assets", "resources", "static")
