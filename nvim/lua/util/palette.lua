@@ -30,7 +30,7 @@ M.categories = {
                     local is_fav = favorites.is_favorite(name)
                     local item = {
                         desc = (is_fav and "★ " or "") .. name,
-                        keys = "f",
+                        keys = "ctrl-f",
                         project = name, -- used by the `f` toggle in M.open
                         action = function()
                             -- Avoid landing in a no-neck-pain padding window
@@ -51,13 +51,13 @@ M.categories = {
 
             local items = {}
             if #favs > 0 then
-                items[#items + 1] = { desc = "Favorites  (f: toggle)", section = true }
+                items[#items + 1] = { desc = "Favorites  (ctrl-f: toggle)", section = true }
                 for _, it in ipairs(favs) do
                     items[#items + 1] = it
                 end
                 items[#items + 1] = { desc = "All Projects", section = true }
             else
-                items[#items + 1] = { desc = "All Projects  (f: favorite)", section = true }
+                items[#items + 1] = { desc = "All Projects  (ctrl-f: favorite)", section = true }
             end
             for _, it in ipairs(rest) do
                 items[#items + 1] = it
@@ -475,6 +475,8 @@ local state = {
     query = "", -- current search bar text ("" = browse mode)
     results = {}, -- flattened { item = ..., ci = category index } matches
     result_idx = 1, -- selected entry in `results`
+    pane = "cat", -- browse-mode virtual focus: "cat" (left) or "act" (right)
+    act_idx = 3, -- selected actions-pane line while pane == "act"
     orig_colorscheme = nil, -- restored if a theme preview isn't confirmed
     confirmed = false, -- set when an action is run via <CR>
 }
@@ -538,7 +540,11 @@ local function render_browse()
             if pad < 1 then
                 pad = 1
             end
-            table.insert(lines, "  " .. item.desc .. string.rep(" ", pad) .. keys)
+            -- Selection marker for the arrow-driven virtual focus (the search
+            -- bar keeps real focus; see the imaps in M.open).
+            local marker = (state.query == "" and state.pane == "act" and #lines + 1 == state.act_idx) and "▶ "
+                or "  "
+            table.insert(lines, marker .. item.desc .. string.rep(" ", pad) .. keys)
             line_map[#lines] = item
         end
     end
@@ -663,6 +669,8 @@ function M.open(category)
     state.query = ""
     state.results = {}
     state.result_idx = 1
+    state.pane = "cat"
+    state.act_idx = 3
 
     -- Refresh any categories whose contents are computed at open time.
     for _, cat in ipairs(M.categories) do
@@ -734,7 +742,7 @@ function M.open(category)
         vim.api.nvim_buf_clear_namespace(state.search_buf, SEARCH_NS, 0, -1)
         if state.query == "" then
             vim.api.nvim_buf_set_extmark(state.search_buf, SEARCH_NS, 0, 0, {
-                virt_text = { { "type to filter — ↑/↓ move, ⏎ run", "Comment" } },
+                virt_text = { { "type to filter — arrows navigate, ⏎ run", "Comment" } },
                 virt_text_pos = "overlay",
             })
         end
@@ -752,6 +760,9 @@ function M.open(category)
                 return
             end
             state.query = q
+            if q == "" then
+                state.pane = "cat" -- e.g. backspaced the query away
+            end
             update_hint()
             if q ~= "" then
                 update_search()
@@ -856,34 +867,129 @@ function M.open(category)
         end)
     end
 
-    -- Search bar: ↑/↓ move through categories (empty query) or matches, both
-    -- wrapping; <CR> runs the selected match; <Tab> moves focus to the panes;
-    -- <Esc> clears the query first, then closes.
+    -- Search bar: real focus stays here so any typed character filters, but
+    -- while the query is empty the arrow keys drive a "virtual focus" across
+    -- the panes — ↑/↓ move (wrapping), → enters the category's actions,
+    -- ← goes back. With a query, ↑/↓ move through matches and ←/→ fall back
+    -- to editing the query text. <CR> runs, <Esc> clears then closes.
+    local function first_actionable()
+        local last = vim.api.nvim_buf_line_count(state.act_buf)
+        for i = 3, last do
+            if state.line_map[i] then
+                return i
+            end
+        end
+        return nil
+    end
+    local function fire_on_focus()
+        local cat = M.categories[state.selected]
+        if cat.on_focus and state.line_map[state.act_idx] then
+            cat.on_focus(state.line_map[state.act_idx])
+        end
+    end
+    local function enter_act_pane()
+        local first = first_actionable()
+        if not first then
+            return
+        end
+        state.pane = "act"
+        state.act_idx = first
+        render_right()
+        fire_on_focus()
+    end
+    -- Move the actions-pane selection, skipping header/section lines and
+    -- wrapping top ↔ bottom.
+    local function browse_act_move(delta)
+        local last = vim.api.nvim_buf_line_count(state.act_buf)
+        local i = state.act_idx
+        for _ = 1, last do
+            i = i + delta
+            if i > last then
+                i = 1
+            elseif i < 1 then
+                i = last
+            end
+            if state.line_map[i] then
+                state.act_idx = i
+                render_right()
+                fire_on_focus()
+                return
+            end
+        end
+    end
+    -- Re-send a key with its default behavior (bypassing these maps), used
+    -- to keep ←/→ editing the query text when one is typed.
+    local function feed_raw(key)
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "n", false)
+    end
+
     local function search_nav(delta)
-        if state.query == "" then
+        if state.query ~= "" then
+            if #state.results > 0 then
+                local n = #state.results
+                state.result_idx = ((state.result_idx - 1 + delta) % n) + 1
+                render_right()
+            end
+        elseif state.pane == "act" then
+            browse_act_move(delta)
+        else
             select_category(delta)
-        elseif #state.results > 0 then
-            local n = #state.results
-            state.result_idx = ((state.result_idx - 1 + delta) % n) + 1
-            render_right()
         end
     end
     imap("<Down>", function() search_nav(1) end)
     imap("<Up>", function() search_nav(-1) end)
-    imap("<CR>", function()
-        if state.query == "" then
-            enter_actions()
-        elseif #state.results > 0 then
-            run_action(state.result_idx + 2) -- +2: header rows in the results pane
+    imap("<Right>", function()
+        if state.query ~= "" then
+            feed_raw("<Right>")
+        elseif state.pane == "cat" then
+            enter_act_pane()
+        end
+    end)
+    imap("<Left>", function()
+        if state.query ~= "" then
+            feed_raw("<Left>")
+        elseif state.pane == "act" then
+            state.pane = "cat"
+            render_right()
         end
     end)
     imap("<Tab>", function()
-        vim.cmd("stopinsert")
-        if state.query == "" then
-            vim.api.nvim_set_current_win(state.cat_win)
+        if state.query == "" and state.pane == "cat" then
+            enter_act_pane()
+        end
+    end)
+    imap("<CR>", function()
+        if state.query ~= "" then
+            if #state.results > 0 then
+                run_action(state.result_idx + 2) -- +2: header rows in the results pane
+            end
+        elseif state.pane == "act" then
+            run_action(state.act_idx)
         else
-            vim.api.nvim_set_current_win(state.act_win)
-            pcall(vim.api.nvim_win_set_cursor, state.act_win, { state.result_idx + 2, 0 })
+            enter_act_pane()
+        end
+    end)
+    -- Favorite-toggle for the focused project (Projects category). Ctrl-f,
+    -- because a plain `f` now types into the filter.
+    imap("<C-f>", function()
+        if state.query ~= "" or state.pane ~= "act" then
+            return
+        end
+        local item = state.line_map[state.act_idx]
+        if not (item and item.project) then
+            return
+        end
+        require("util.favorites").toggle(item.project)
+        local cat = M.categories[state.selected]
+        if cat.dynamic then
+            cat.items = cat.dynamic()
+        end
+        render_right()
+        -- The list re-sorts on toggle; if the old line vanished, snap back
+        -- to the first project.
+        if not state.line_map[state.act_idx] then
+            state.act_idx = first_actionable() or state.act_idx
+            render_right()
         end
     end)
     imap("<Esc>", function()
@@ -893,6 +999,7 @@ function M.open(category)
             -- First <Esc> clears the query; the guard in the TextChanged
             -- autocmd keeps this from double-rendering.
             state.query = ""
+            state.pane = "cat"
             vim.api.nvim_buf_set_lines(state.search_buf, 0, -1, false, { "" })
             update_hint()
             render_left()
