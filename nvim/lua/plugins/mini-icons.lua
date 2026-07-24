@@ -34,6 +34,11 @@ return {
         add({ glyph = "󱂷", hl = "MiniIconsAzure" }, "type", "types", "interface", "interfaces", "contracts")
         add({ glyph = "󰪺", hl = "MiniIconsGrey" }, "cache", "tmp", "temp")
         add({ glyph = "󰅩", hl = "MiniIconsBlue" }, "component", "components")
+        add({ glyph = "󰕰", hl = "MiniIconsPurple" }, "ui", "widgets")
+        add({ glyph = "󰚀", hl = "MiniIconsAzure" }, "element", "elements")
+        add({ glyph = "󰐩", hl = "MiniIconsRed" }, "directive", "directives")
+        add({ glyph = "󰈬", hl = "MiniIconsGreen" }, "page", "pages", "views", "screens")
+        add({ glyph = "󰟥", hl = "MiniIconsYellow" }, "pipe", "pipes")
         add({ glyph = "󰃭", hl = "MiniIconsYellow" }, "event", "events")
         add({ glyph = "󰠮", hl = "MiniIconsGreen" }, "record", "records")
         add({ glyph = "󰏗", hl = "MiniIconsOrange" }, "installer", "installers")
@@ -44,29 +49,36 @@ return {
         directory.DTO = directory.dto
         directory.DTOs = directory.dto
         directory.DI = directory.di
+        directory.UI = directory.ui
 
         -- General purpose
         add({ glyph = "󱥾", hl = "MiniIconsGreen" }, "test", "tests", "spec", "specs", "__tests__")
         add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "helper", "helpers", "tools")
         add({ glyph = "󱁽", hl = "MiniIconsPurple" }, "config", "configs", "settings", "conf")
+        add({ glyph = "󰙞", hl = "MiniIconsGreen" }, "environment", "environments", "env", "envs")
         add({ glyph = "󰉕", hl = "MiniIconsGreen" }, "common", "commons", "shared")
         add({ glyph = "󰲁", hl = "MiniIconsOrange" }, "webhook", "webhooks")
         add({ glyph = "󰲂", hl = "MiniIconsAzure" }, "doc", "docs")
         add({ glyph = "󰲃", hl = "MiniIconsGrey" }, "log", "logs")
         add({ glyph = "󰉓", hl = "MiniIconsBlue" }, "asset", "assets", "resources", "static")
+        add({ glyph = "󰭃", hl = "MiniIconsPurple" }, "style", "styles", "css", "scss", "sass", "themes")
         add({ glyph = "󰉏", hl = "MiniIconsPurple" }, "image", "images", "img", "icons")
         add({ glyph = "󱍙", hl = "MiniIconsCyan" }, "audio", "sounds", "music")
         add({ glyph = "󰢬", hl = "MiniIconsYellow" }, "auth", "security")
         add({ glyph = "󰉐", hl = "MiniIconsRed" }, "secret", "secrets", "private")
         add({ glyph = "󰉌", hl = "MiniIconsBlue" }, "user", "users", "profile", "profiles", "account", "accounts")
         add({ glyph = "󰡰", hl = "MiniIconsPurple" }, "api", "network", "http", "connection")
-        add({ glyph = "󰍛", hl = "MiniIconsBlue" }, "core", "main", "_Core")
+        add({ glyph = "󰠅", hl = "MiniIconsCyan" }, "gateway", "gateways", "proxy", "proxies")
+        add({ glyph = "󰍛", hl = "MiniIconsBlue" }, "core", "main", "_Core", "_core")
         add({ glyph = "󰚝", hl = "MiniIconsYellow" }, "feature", "features", "module", "modules")
+        add({ glyph = "󰙅", hl = "MiniIconsRed" }, "state", "store", "stores", "reducers", "actions")
         add({ glyph = "󰴋", hl = "MiniIconsCyan" }, "migration", "migrations", "sync")
         add({ glyph = "󰷌", hl = "MiniIconsOrange" }, "notification", "notifications", "alerts")
         add({ glyph = "󰉍", hl = "MiniIconsGreen" }, "download", "downloads")
         add({ glyph = "󰉙", hl = "MiniIconsAzure" }, "upload", "uploads")
         add({ glyph = "󰛫", hl = "MiniIconsGrey" }, "archive", "backup", "zip")
+        add({ glyph = "󰛖", hl = "MiniIconsRed" }, "font", "fonts")
+        add({ glyph = "󰗊", hl = "MiniIconsAzure" }, "i18n", "locale", "locales", "lang", "translations")
 
         return { directory = directory }
     end,
