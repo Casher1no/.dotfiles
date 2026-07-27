@@ -77,6 +77,11 @@ return {
         add({ glyph = "󰉍", hl = "MiniIconsGreen" }, "download", "downloads")
         add({ glyph = "󰉙", hl = "MiniIconsAzure" }, "upload", "uploads")
         add({ glyph = "󰛫", hl = "MiniIconsGrey" }, "archive", "backup", "zip")
+        add({ glyph = "󰀻", hl = "MiniIconsBlue" }, "app", "apps")
+        add({ glyph = "󰆦", hl = "MiniIconsOrange" }, "storage")
+        add({ glyph = "󰄄", hl = "MiniIconsPurple" }, "framework", "frameworks", "vendor")
+        add({ glyph = "󱊰", hl = "MiniIconsRed" }, "route", "routes", "routing")
+        add({ glyph = "󰞉", hl = "MiniIconsGreen" }, "public", "www", "web")
         add({ glyph = "󰛖", hl = "MiniIconsRed" }, "font", "fonts")
         add({ glyph = "󰗊", hl = "MiniIconsAzure" }, "i18n", "locale", "locales", "lang", "translations")
 
