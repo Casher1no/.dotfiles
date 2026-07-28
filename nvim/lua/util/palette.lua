@@ -223,6 +223,37 @@ M.categories = {
             { desc = "Help tags", keys = "<leader>fh", cmd = "Telescope help_tags" },
             { desc = "Search word under cursor", keys = "<leader>fw", cmd = "Telescope grep_string" },
             { desc = "Find TODOs", keys = "<leader>ft", cmd = "TodoTelescope" },
+            { desc = "Paste clipboard into prompt (in picker)", keys = "<C-v> / <C-r>+" },
+        },
+    },
+    {
+        name = "Search & Replace",
+        icon = "",
+        items = {
+            {
+                desc = "Replace word under cursor (in file)",
+                keys = "<leader>sr",
+                action = function()
+                    vim.api.nvim_feedkeys(
+                        vim.api.nvim_replace_termcodes([[:%s/\<<C-r><C-w>\>//g<Left><Left>]], true, false, true),
+                        "n",
+                        false
+                    )
+                end,
+            },
+            {
+                desc = "Replace all in file (fill in old/new)",
+                keys = ":%s/old/new/g",
+                action = function()
+                    vim.api.nvim_feedkeys(
+                        vim.api.nvim_replace_termcodes([[:%s//g<Left><Left><Left>]], true, false, true),
+                        "n",
+                        false
+                    )
+                end,
+            },
+            { desc = "Replace selection in file (visual)", keys = "<leader>sr (visual)" },
+            { desc = "Confirm each match: add c → :%s/old/new/gc", keys = "gc flag" },
         },
     },
     {

@@ -83,6 +83,16 @@ return {
                         ["<C-j>"] = "move_selection_next",
                         ["<C-k>"] = "move_selection_previous",
                         ["<Esc>"] = "close", -- single Esc closes
+                        -- Paste the system clipboard into the prompt. The prompt
+                        -- is a normal insert-mode buffer, so feed <C-r>+ to pull
+                        -- in the + (system clipboard) register.
+                        ["<C-v>"] = function()
+                            vim.api.nvim_feedkeys(
+                                vim.api.nvim_replace_termcodes("<C-r>+", true, false, true),
+                                "n",
+                                false
+                            )
+                        end,
                     },
                 },
             },

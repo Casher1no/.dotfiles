@@ -10,6 +10,10 @@ vim.cmd("set cursorline")
 
 vim.opt.scrolloff = 10
 
+-- Live preview of :substitute in a split — as you type `:%s/ga/ka/g` every
+-- match is highlighted and the result previewed before you hit <CR>.
+vim.opt.inccommand = "split"
+
 vim.opt.number = true
 vim.opt.signcolumn = "yes:1"
 vim.opt.colorcolumn = "120"
@@ -98,6 +102,13 @@ vim.keymap.set("n", "<Esc>", function()
     vim.cmd.nohlsearch()
 end, { desc = "Escape: close docs popup, clear search highlight" })
 vim.keymap.set("i", "<Esc>", "<cmd>nohlsearch<CR><Esc>", { desc = "Escape and clear search highlight" })
+
+-- Replace-in-file: open the :substitute bar prefilled with the word under the
+-- cursor (whole-word), cursor waiting in the replacement slot. Type the new
+-- text and <CR> — inccommand previews every match live as you type.
+vim.keymap.set("n", "<leader>sr", [[:%s/\<<C-r><C-w>\>//g<Left><Left>]], { desc = "Replace word under cursor (file)" })
+-- Visual mode: replace the selected text throughout the file.
+vim.keymap.set("v", "<leader>sr", [[y:%s/<C-r>0//g<Left><Left>]], { desc = "Replace selection (file)" })
 
 -- Delete without yanking
 vim.keymap.set("n", "d", '"_d', { noremap = true })
