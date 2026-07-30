@@ -50,7 +50,13 @@ return {
     opts = function()
         -- Hide Unity's .meta sidecar files from every picker (find_files,
         -- live_grep, grep_string, …). Lua patterns, matched against the path.
+        -- Also skip dependency/package folders: in projects without git,
+        -- rg/fd have no .gitignore to respect, so vendor and node_modules
+        -- would otherwise flood every search.
         local file_ignore_patterns = { "%.meta$" }
+        for _, dir in ipairs({ "node_modules", "vendor", "%.venv", "venv", "__pycache__" }) do
+            vim.list_extend(file_ignore_patterns, { "^" .. dir .. "/", "/" .. dir .. "/" })
+        end
         if require("util.unity").is_unity_project() then
             -- Prefabs/scenes/assets are huge serialized YAML blobs, not code —
             -- searching them just buries real matches under noise.

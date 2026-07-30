@@ -4,6 +4,10 @@
 --     (angularls + vtsls both cover .ts files and doubled every hit)
 --   - groups results: current file first, as compact "  123: code" rows,
 --     then other files as "path:123: code"
+--   - in PHP, merges ripgrep call-site hits (util/grepref.lua) the LSP
+--     missed — Eloquent's magic methods hide receiver types from
+--     intelephense, so e.g. `$link->registerClick()` after a dynamic
+--     `::where(...)->first()` is invisible to textDocument/references
 -- The telescope default sorting_strategy is "ascending" (see
 -- plugins/telescope.lua), so finder order is display order.
 local M = {}
@@ -13,6 +17,8 @@ local M = {}
 function M._gather(cb)
     local win = vim.api.nvim_get_current_win()
     local buf = vim.api.nvim_get_current_buf()
+    local word = vim.fn.expand("<cword>")
+    local is_php = vim.bo[buf].filetype == "php"
     local clients = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })
     if #clients == 0 then
         vim.notify("No attached LSP supports references here", vim.log.levels.WARN)
@@ -20,29 +26,11 @@ function M._gather(cb)
     end
     local encoding = clients[1].offset_encoding or "utf-16"
 
-    vim.lsp.buf_request_all(buf, "textDocument/references", function(client)
-        local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
-        params.context = { includeDeclaration = true }
-        return params
-    end, function(results)
-        local seen, locations = {}, {}
-        for _, res in pairs(results or {}) do
-            for _, loc in ipairs(res.result or {}) do
-                local uri = loc.uri or loc.targetUri
-                local range = loc.range or loc.targetSelectionRange
-                local key = ("%s:%d:%d"):format(uri, range.start.line, range.start.character)
-                if not seen[key] then
-                    seen[key] = true
-                    locations[#locations + 1] = loc
-                end
-            end
-        end
-        if #locations == 0 then
+    local function finish(items)
+        if #items == 0 then
             vim.notify("No references found", vim.log.levels.INFO)
             return
         end
-
-        local items = vim.lsp.util.locations_to_items(locations, encoding)
         local current = vim.api.nvim_buf_get_name(buf)
         local here, elsewhere = {}, {}
         for _, it in ipairs(items) do
@@ -61,6 +49,47 @@ function M._gather(cb)
         vim.list_extend(ordered, here)
         vim.list_extend(ordered, elsewhere)
         cb(ordered, current)
+    end
+
+    vim.lsp.buf_request_all(buf, "textDocument/references", function(client)
+        local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
+        params.context = { includeDeclaration = true }
+        return params
+    end, function(results)
+        local seen, locations = {}, {}
+        for _, res in pairs(results or {}) do
+            for _, loc in ipairs(res.result or {}) do
+                local uri = loc.uri or loc.targetUri
+                local range = loc.range or loc.targetSelectionRange
+                local key = ("%s:%d:%d"):format(uri, range.start.line, range.start.character)
+                if not seen[key] then
+                    seen[key] = true
+                    locations[#locations + 1] = loc
+                end
+            end
+        end
+        local items = vim.lsp.util.locations_to_items(locations, encoding)
+
+        if not is_php then
+            finish(items)
+            return
+        end
+        local root = vim.fs.root(buf, { "composer.json", ".git" }) or vim.fn.getcwd()
+        require("util.grepref").method_calls(word, root, function(grep_items)
+            -- LSP hits win; grep only fills lines the LSP didn't report.
+            local have = {}
+            for _, it in ipairs(items) do
+                have[vim.fn.fnamemodify(it.filename, ":p") .. ":" .. it.lnum] = true
+            end
+            for _, it in ipairs(grep_items) do
+                local key = vim.fn.fnamemodify(it.filename, ":p") .. ":" .. it.lnum
+                if not have[key] then
+                    have[key] = true
+                    items[#items + 1] = it
+                end
+            end
+            finish(items)
+        end)
     end)
 end
 
@@ -73,11 +102,14 @@ function M.open()
         local function entry_maker(item)
             local in_current = vim.fn.fnamemodify(item.filename, ":p") == current
             local text = vim.trim(item.text or "")
+            -- ·grep = found by text search, not confirmed by the LSP
+            -- (util/grepref.lua) — could be a same-named method elsewhere.
+            local suffix = item.via_grep and "  ·grep" or ""
             local display
             if in_current then
-                display = ("  %4d: %s"):format(item.lnum, text)
+                display = ("  %4d: %s%s"):format(item.lnum, text, suffix)
             else
-                display = ("%s:%d: %s"):format(vim.fn.fnamemodify(item.filename, ":."), item.lnum, text)
+                display = ("%s:%d: %s%s"):format(vim.fn.fnamemodify(item.filename, ":."), item.lnum, text, suffix)
             end
             return {
                 value = item,

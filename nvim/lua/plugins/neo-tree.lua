@@ -15,6 +15,30 @@ local image_extensions = {
     avif = true,
 }
 
+-- Dependency/package folders: always rendered grayed-out (same look as
+-- gitignored files), even in projects without git.
+local package_dirs = {
+    node_modules = true,
+    vendor = true,
+    [".venv"] = true,
+    venv = true,
+    __pycache__ = true,
+}
+
+-- True for the folders above and for anything inside them.
+local function in_package_dir(node)
+    if package_dirs[node.name] then
+        return true
+    end
+    local path = node.path or ""
+    for dir in pairs(package_dirs) do
+        if path:find("/" .. dir .. "/", 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 return {
     "nvim-neo-tree/neo-tree.nvim",
     branch = "v3.x",
@@ -154,6 +178,15 @@ return {
         filesystem = {
             follow_current_file = { enabled = true }, -- highlight the file you're editing
             use_libuv_file_watcher = true, -- auto-refresh on external changes
+            components = {
+                name = function(config, node, state)
+                    local result = require("neo-tree.sources.filesystem.components").name(config, node, state)
+                    if in_package_dir(node) then
+                        result.highlight = require("neo-tree.ui.highlights").GIT_IGNORED
+                    end
+                    return result
+                end,
+            },
             filtered_items = {
                 hide_dotfiles = false,
                 hide_gitignored = false,
