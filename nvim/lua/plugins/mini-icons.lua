@@ -87,6 +87,36 @@ return {
 
         return { directory = directory }
     end,
+    config = function(_, opts)
+        require("mini.icons").setup(opts)
+
+        -- Pin icon colors so switching themes doesn't recolor them. Every
+        -- colorscheme (and mini.icons itself) redefines the MiniIcons*
+        -- groups from its own palette; overriding them here — and again on
+        -- each ColorScheme — keeps icons at these fixed (catppuccin-mocha)
+        -- colors everywhere they're used (explorer, telescope, lualine, …).
+        local icon_colors = {
+            MiniIconsAzure = "#74c7ec",
+            MiniIconsBlue = "#89b4fa",
+            MiniIconsCyan = "#94e2d5",
+            MiniIconsGreen = "#a6e3a1",
+            MiniIconsGrey = "#9399b2",
+            MiniIconsOrange = "#fab387",
+            MiniIconsPurple = "#cba6f7",
+            MiniIconsRed = "#f38ba8",
+            MiniIconsYellow = "#f9e2af",
+        }
+        local function pin_icon_colors()
+            for group, fg in pairs(icon_colors) do
+                vim.api.nvim_set_hl(0, group, { fg = fg })
+            end
+        end
+        pin_icon_colors()
+        vim.api.nvim_create_autocmd("ColorScheme", {
+            group = vim.api.nvim_create_augroup("fixed_icon_colors", { clear = true }),
+            callback = pin_icon_colors,
+        })
+    end,
     init = function()
         -- Any require("nvim-web-devicons") resolves to the mini.icons mock.
         -- package.preload runs before the runtime path is searched, so this
