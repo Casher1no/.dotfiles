@@ -53,13 +53,13 @@ return {
 
         -- General purpose
         add({ glyph = "󱥾", hl = "MiniIconsGreen" }, "test", "tests", "spec", "specs", "__tests__")
-        add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "helper", "helpers", "tools")
+        add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "utility", "utilities", "helper", "helpers", "tools")
         add({ glyph = "󱁽", hl = "MiniIconsPurple" }, "config", "configs", "settings", "conf")
         add({ glyph = "󰙞", hl = "MiniIconsGreen" }, "environment", "environments", "env", "envs")
         add({ glyph = "󰉕", hl = "MiniIconsGreen" }, "common", "commons", "shared")
         add({ glyph = "󰲁", hl = "MiniIconsOrange" }, "webhook", "webhooks")
         add({ glyph = "󰲂", hl = "MiniIconsAzure" }, "doc", "docs")
-        add({ glyph = "󰲃", hl = "MiniIconsGrey" }, "log", "logs")
+        add({ glyph = "󰲃", hl = "MiniIconsGrey" }, "log", "logs", "logger", "loggers")
         add({ glyph = "󰉓", hl = "MiniIconsBlue" }, "asset", "assets", "resources", "static")
         add({ glyph = "󰭃", hl = "MiniIconsPurple" }, "style", "styles", "css", "scss", "sass", "themes")
         add({ glyph = "󰉏", hl = "MiniIconsPurple" }, "image", "images", "img", "icons")
@@ -84,6 +84,13 @@ return {
         add({ glyph = "󰞉", hl = "MiniIconsGreen" }, "public", "www", "web")
         add({ glyph = "󰛖", hl = "MiniIconsRed" }, "font", "fonts")
         add({ glyph = "󰗊", hl = "MiniIconsAzure" }, "i18n", "locale", "locales", "lang", "translations")
+        add({ glyph = "󰆓", hl = "MiniIconsGreen" }, "save", "saves", "savedata", "savegame", "savegames")
+        add({ glyph = "󰐱", hl = "MiniIconsPurple" }, "extension", "extensions")
+        add({ glyph = "", hl = "MiniIconsYellow" }, "process", "processes")
+        add({ glyph = "󰔟", hl = "MiniIconsCyan" }, "timer", "timers")
+        add({ glyph = "󰓹", hl = "MiniIconsAzure" }, "attribute", "attributes")
+        add({ glyph = "󰄀", hl = "MiniIconsBlue" }, "camera", "cameras")
+        add({ glyph = "󰚥", hl = "MiniIconsGreen" }, "plugin", "plugins")
 
         return { directory = directory }
     end,
