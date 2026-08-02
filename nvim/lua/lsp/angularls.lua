@@ -11,13 +11,13 @@ local function collect_node_modules(root_dir)
         table.insert(results, project_node)
     end
 
-    local ngserver_exe = fn.exepath("ngserver")
-    if ngserver_exe and #ngserver_exe > 0 then
-        local realpath = uv.fs_realpath(ngserver_exe) or ngserver_exe
-        local candidate = fs.normalize(fs.joinpath(fs.dirname(realpath), "../../.."))
-        if uv.fs_stat(candidate) then
-            table.insert(results, candidate)
-        end
+    -- Mason's bin/ entry is a .cmd shim on Windows, so walking up from
+    -- exepath() lands outside the package. Address the package directly.
+    local mason_node = fs.normalize(
+        fs.joinpath(fn.stdpath("data"), "mason/packages/angular-language-server/node_modules")
+    )
+    if uv.fs_stat(mason_node) then
+        table.insert(results, mason_node)
     end
 
     return results
@@ -67,5 +67,15 @@ return {
         return vim.lsp.rpc.start(cmd, dispatchers)
     end,
     filetypes = { "typescript", "html", "typescriptreact", "typescript.tsx", "htmlangular" },
-    root_markers = { "angular.json", "nx.json" },
+    -- root_markers alone would not stop the server: an unmatched marker set
+    -- only leaves root_dir nil, and nvim starts the client anyway. ngserver
+    -- then dies resolving @angular/language-service in a non-Angular project.
+    -- Returning without calling on_dir is what actually prevents the start.
+    root_dir = function(bufnr, on_dir)
+        local root = fs.root(bufnr, { "angular.json", "nx.json" })
+        if not root then
+            return
+        end
+        on_dir(root)
+    end,
 }
