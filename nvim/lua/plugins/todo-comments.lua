@@ -7,10 +7,11 @@ return {
     cmd = { "TodoTelescope", "TodoQuickFix", "TodoLocList" },
     opts = {
         keywords = {
-            TODO = { icon = " ", color = "yellow" },
+            TODO = { icon = " ", color = "orange" },
         },
         colors = {
-            yellow = { "#FFDD33" },
+            -- catppuccin-mocha peach, same orange the pinned icon palette uses
+            orange = { "#fab387" },
         },
     },
     keys = {

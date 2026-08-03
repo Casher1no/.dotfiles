@@ -22,7 +22,7 @@ return {
 
         -- Domain layers
         add({ glyph = "󱁿", hl = "MiniIconsCyan" }, "service", "services")
-        add({ glyph = "󱋣", hl = "MiniIconsYellow" }, "repository", "repositories", "db", "database", "data")
+        add({ glyph = "󱋣", hl = "MiniIconsGreen" }, "repository", "repositories", "db", "database", "data")
         add({ glyph = "󰉗", hl = "MiniIconsOrange" }, "factory", "factories")
         add({ glyph = "󰾶", hl = "MiniIconsPurple" }, "dto", "dtos")
         add({ glyph = "󱉭", hl = "MiniIconsRed" }, "entity", "entities")
@@ -53,7 +53,7 @@ return {
 
         -- General purpose
         add({ glyph = "󱥾", hl = "MiniIconsGreen" }, "test", "tests", "spec", "specs", "__tests__")
-        add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "helper", "helpers", "tools")
+        add({ glyph = "󱧼", hl = "MiniIconsOrange" }, "util", "utils", "utility", "utilities", "helper", "helpers", "tools")
         add({ glyph = "󱁽", hl = "MiniIconsPurple" }, "config", "configs", "settings", "conf")
         add({ glyph = "󰙞", hl = "MiniIconsGreen" }, "environment", "environments", "env", "envs")
         add({ glyph = "󰉕", hl = "MiniIconsGreen" }, "common", "commons", "shared")

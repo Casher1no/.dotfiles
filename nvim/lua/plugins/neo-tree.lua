@@ -15,18 +15,11 @@ local image_extensions = {
     avif = true,
 }
 
--- Dependency/package folders: always rendered grayed-out (same look as
+-- True for dependency/package folders (util/tree_tints.lua owns the list)
+-- and anything inside them; their text renders grayed-out (same look as
 -- gitignored files), even in projects without git.
-local package_dirs = {
-    node_modules = true,
-    vendor = true,
-    [".venv"] = true,
-    venv = true,
-    __pycache__ = true,
-}
-
--- True for the folders above and for anything inside them.
 local function in_package_dir(node)
+    local package_dirs = require("util.tree_tints").package_dirs
     if package_dirs[node.name] then
         return true
     end
@@ -75,6 +68,17 @@ return {
         close_if_last_window = true,
         enable_git_status = true,
         enable_diagnostics = true,
+        event_handlers = {
+            -- Full-width background tints for package/test folder rows.
+            -- Registers the tree state; the actual painting happens in
+            -- util/tree_tints.lua via a decoration provider on redraw.
+            {
+                event = "after_render",
+                handler = function(state)
+                    require("util.tree_tints").register(state)
+                end,
+            },
+        },
         default_component_configs = {
             icon = {
                 -- Neo-tree draws its own single-color folder glyph and only

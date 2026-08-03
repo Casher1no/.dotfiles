@@ -14,6 +14,12 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 	end,
 })
 
+-- checktime only refreshes buffers; language servers keep their own project
+-- model and go stale the same way (phantom "cannot find X" errors after AI
+-- tools or git rewrite files). util/lsp_refresh.lua pushes disk changes to
+-- the servers and auto-heals unresolved references. :LspRefresh forces it.
+require("util.lsp_refresh").setup()
+
 -- Auto-save: write modified, named, real-file buffers at natural pause points
 -- (leaving insert, switching buffer/window, losing focus, idle) so external
 -- tools never collide with unsaved edits. Skipped on every keystroke on purpose

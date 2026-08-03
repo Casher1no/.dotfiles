@@ -37,8 +37,11 @@ return {
     keys = {
         -- JetBrains-style: <C-p> for files, double-shift feel via <leader>ff
         { "<C-p>", "<cmd>Telescope find_files<cr>", desc = "Find files" },
-        { "<leader>ff", "<cmd>Telescope find_files<cr>", desc = "Find files" },
-        { "<leader>fg", "<cmd>Telescope live_grep<cr>", desc = "Live grep (search in files)" },
+        -- ff/fg go through util/telescope_case.lua: always case-insensitive
+        -- on open; <C-s> in the prompt toggles match case for that search
+        -- only — see the Aa badge on the right of the prompt.
+        { "<leader>ff", function() require("util.telescope_case").find_files() end, desc = "Find files" },
+        { "<leader>fg", function() require("util.telescope_case").live_grep() end, desc = "Live grep (search in files)" },
         { "<leader>fb", "<cmd>Telescope buffers<cr>", desc = "Open buffers" },
         { "<leader>fr", "<cmd>Telescope oldfiles<cr>", desc = "Recent files (all)" },
         { "<leader>fp", project_recent_files, desc = "Recent files (this project, max 12)" },
