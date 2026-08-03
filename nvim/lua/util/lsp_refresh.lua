@@ -86,8 +86,12 @@ end
 function M.refresh(force)
     local roots = {}
     for _, client in ipairs(vim.lsp.get_clients()) do
-        if client.root_dir then
-            roots[client.root_dir] = true
+        local root = client.root_dir
+        -- Absolute existing dirs only: a client started with a cwd-relative
+        -- root would make vim.system resolve it against nvim's current cwd
+        -- and blow up with ENOENT once the cwd moves.
+        if root and root:sub(1, 1) == "/" and uv.fs_stat(root) then
+            roots[root] = true
         end
     end
     for root in pairs(roots) do

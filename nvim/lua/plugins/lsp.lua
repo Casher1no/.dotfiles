@@ -43,6 +43,20 @@ return {
 
                 -- Completion is handled by blink.cmp (see plugins/blink-cmp.lua)
 
+                -- Load eagerly (not on first gd press) so its client start-time
+                -- tracker sees every server from the moment it attaches — gd
+                -- uses those ages to retry instead of reporting "not found"
+                -- while a just-started server is still loading its index.
+                require("util.goto")
+
+                -- JS projects without a ts/jsconfig only get references for
+                -- open files (tsserver inferred project); preload the rest
+                -- into hidden buffers so navigation covers the whole project
+                -- (util/tsproject.lua).
+                if client.name == "vtsls" then
+                    require("util.tsproject").preload(client, bufnr)
+                end
+
                 local opts = { buffer = bufnr, silent = true }
 
                 -- Hover and signature help. K is diagnostics-aware: on a

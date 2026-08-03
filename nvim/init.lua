@@ -28,9 +28,9 @@ vim.api.nvim_create_autocmd('FileType', {
     vim.lsp.start({
       name = 'better-php-sense',
       cmd = { 'php', '/Users/maikls/Projects/better-php-sense/bin/server.php' },
-      root_dir = vim.fs.dirname(
-        vim.fs.find({ 'composer.json', '.git' }, { path = args.file, upward = true })[1]
-      ),
+      -- vim.fs.root resolves from the buffer's absolute path; args.file can
+      -- be cwd-relative, which used to leak relative roots like "backend".
+      root_dir = vim.fs.root(args.buf, { 'composer.json', '.git' }),
     })
   end,
 })

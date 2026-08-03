@@ -51,6 +51,10 @@ return {
         { "<leader>gs", "<cmd>Telescope git_status<cr>", desc = "Git changes (status + diff)" },
     },
     opts = function()
+        -- Row tints matching the explorer: results in test folders get the
+        -- green background, package folders the gray one (util/telescope_tints).
+        require("util.telescope_tints")
+
         -- Hide Unity's .meta sidecar files from every picker (find_files,
         -- live_grep, grep_string, …). Lua patterns, matched against the path.
         -- Also skip dependency/package folders: in projects without git,

@@ -123,6 +123,11 @@ function M.open()
 
         pickers
             .new({}, {
+                -- Never censor LSP results with the search-noise ignore
+                -- patterns: a reference inside vendor/node_modules is still
+                -- a reference (telescope filters picker entries through
+                -- file_ignore_patterns by default).
+                file_ignore_patterns = {},
                 prompt_title = "References — current file first",
                 finder = finders.new_table({ results = items, entry_maker = entry_maker }),
                 sorter = conf.generic_sorter({}),

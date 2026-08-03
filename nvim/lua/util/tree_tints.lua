@@ -63,7 +63,8 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 -- Which tint (if any) applies to a path. Only segments below the tree root
 -- count, so a project itself named "tests" doesn't tint everything. The
 -- outermost matching folder wins (a vendor dir inside tests stays gray).
-local function classify(path, root)
+-- Public: util/telescope_tints.lua reuses it for picker rows.
+function M.classify(path, root)
     if root and path:sub(1, #root) == root then
         path = path:sub(#root + 1)
     end
@@ -121,7 +122,7 @@ vim.api.nvim_set_decoration_provider(ns, {
             for lnum = 1, vim.api.nvim_buf_line_count(bufnr) do
                 local ok, node = pcall(state.tree.get_node, state.tree, lnum)
                 if ok and node and node.path then
-                    local kind = classify(node.path, state.path)
+                    local kind = M.classify(node.path, state.path)
                     if kind then
                         rows[lnum] = tint_groups[kind]
                     end
