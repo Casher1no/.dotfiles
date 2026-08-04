@@ -28,10 +28,39 @@ vim.keymap.set("n", "<C-S>", ":w<CR>", { desc = "Save file" })
 vim.keymap.set("i", "<C-S>", "<Esc>:w<CR>", { desc = "Save file" })
 
 vim.keymap.set("n", "<C-v>", '"+p', { desc = "Paste from clipboard" })
-vim.keymap.set("v", "<C-v>", '"+p', { desc = "Paste from clipboard" })
+vim.keymap.set("v", "<C-v>", '"+P', { desc = "Paste from clipboard" })
+vim.keymap.set("i", "<C-v>", "<C-r><C-o>+", { desc = "Paste from clipboard" })
 
 vim.keymap.set("v", "<C-x>", '"+d', { desc = "Cut to clipboard" })
 vim.keymap.set("v", "<C-c>", '"+y', { desc = "Copy to clipboard" })
+
+-- Same clipboard shortcuts on the Mac Cmd key. These fire in GUI clients
+-- (Neovide); in iTerm2 Cmd isn't forwarded to the app, so map Cmd+C/V/X to
+-- "Send Hex Code" 0x03/0x16/0x18 (same trick as Cmd+6 below) which lands on
+-- the Ctrl mappings above.
+vim.keymap.set("v", "<D-c>", '"+y', { desc = "Copy to clipboard" })
+vim.keymap.set("v", "<D-x>", '"+d', { desc = "Cut to clipboard" })
+vim.keymap.set("n", "<D-v>", '"+p', { desc = "Paste from clipboard" })
+vim.keymap.set("v", "<D-v>", '"+P', { desc = "Paste from clipboard" })
+vim.keymap.set("i", "<D-v>", "<C-r><C-o>+", { desc = "Paste from clipboard" })
+vim.keymap.set("c", "<D-v>", "<C-r>+", { desc = "Paste from clipboard" })
+
+-- Visual-block (column) selection: the default key is Ctrl+V, which the
+-- paste mapping above takes over, so Alt+V enters it instead. Extend the
+-- column with j/k or the arrow keys.
+vim.keymap.set({ "n", "x" }, "<A-v>", "<C-v>", { desc = "Visual block selection" })
+-- macOS: when Option isn't configured as Meta, Option+V arrives as the
+-- composed character "√" instead of <A-v> — map that spelling too.
+vim.keymap.set({ "n", "x" }, "√", "<C-v>", { desc = "Visual block selection" })
+-- Neovide composes Option by default; this makes it send <A-...> instead.
+vim.g.neovide_input_macos_option_key_is_meta = "both"
+-- Typing on all selected lines at once (live, multi-cursor style) is wired
+-- up in plugins/multicursor.lua: block-select with Alt+V, then i/a.
+
+-- Pasting over a visual selection normally yanks the replaced text into the
+-- unnamed register, clobbering what you copied. Visual-mode P pastes without
+-- that side effect, so repeated pastes keep pasting the same text.
+vim.keymap.set("x", "p", "P", { desc = "Paste over selection without losing the yank" })
 
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { desc = "Move selected lines down" })
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move selected lines up" })

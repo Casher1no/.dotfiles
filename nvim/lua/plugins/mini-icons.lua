@@ -46,6 +46,12 @@ return {
         add({ glyph = "󰷈", hl = "MiniIconsPurple" }, "editor", "editors")
         add({ glyph = "󰌌", hl = "MiniIconsRed" }, "input", "inputs")
         add({ glyph = "󱂀", hl = "MiniIconsRed" }, "di", "injection")
+        add({ glyph = "󰏿", hl = "MiniIconsBlue" }, "constant", "constants")
+        add({ glyph = "󰆍", hl = "MiniIconsGrey" }, "console")
+        add({ glyph = "", hl = "MiniIconsYellow" }, "enum", "enums")
+        add({ glyph = "󱐋", hl = "MiniIconsRed" }, "exception", "exceptions")
+        add({ glyph = "󰕥", hl = "MiniIconsCyan" }, "policy", "policies")
+        add({ glyph = "󰏓", hl = "MiniIconsOrange" }, "provider", "providers")
         directory.DTO = directory.dto
         directory.DTOs = directory.dto
         directory.DI = directory.di
