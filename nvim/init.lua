@@ -15,11 +15,18 @@ end
 vim.opt.rtp:prepend(lazypath)
 vim.opt.clipboard = "unnamedplus"
 
-local opts = {}
+local opts = {
+	-- The luarocks on PATH here is 2.0.10 (LuaForWindows), which predates the
+	-- `--tree <path>` argument lazy.nvim passes, so every plugin that ships a
+	-- .rockspec (oxocarbon, telescope, plenary, gitsigns, nvim-dap, nui,
+	-- lspconfig) fails to build with "Argument error: use --tree=<path>".
+	-- None of them need luarocks, so skip the rocks integration entirely.
+	rocks = { enabled = false },
+}
 
 require("vim-options")
 require("config.autocmds")
-require("lazy").setup("plugins")
+require("lazy").setup("plugins", opts)
 
 -- better-php-sense: custom PHP LSP
 vim.api.nvim_create_autocmd('FileType', {

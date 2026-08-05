@@ -4,7 +4,23 @@ return {
         lazy = false,
         config = function()
             local config = require("themery")
-            config.setup({
+            -- Upstream bug (themery bfa58f4): normalizePaths() reads the
+            -- misspelled key `themeConfigFile` instead of the documented
+            -- `themesConfigFile`, so it normalizes nil into "<cwd>/v:null" and
+            -- then decides the option is "set" unless that string still
+            -- contains "v:null". On Windows the normalized path comes back as
+            -- "C:\...\v:\null", the match fails, and the deprecation warning
+            -- fires on every startup (with a hit-enter prompt) even though
+            -- nothing below sets it. Swallow only that one message.
+            local real_print = print
+            print = function(...)
+                local msg = ...
+                if type(msg) == "string" and msg:find("themeConfigFile", 1, true) then
+                    return
+                end
+                return real_print(...)
+            end
+            local ok, err = pcall(config.setup, {
                 -- Switchable colorschemes. Also exposed in the command palette
                 -- (<leader><space> → Themes), which calls setThemeByName to apply
                 -- and persist the choice.
@@ -23,6 +39,10 @@ return {
                 },
                 livePreview = true,
             })
+            print = real_print
+            if not ok then
+                error(err)
+            end
         end,
     },
 

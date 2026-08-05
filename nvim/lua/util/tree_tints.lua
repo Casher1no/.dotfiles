@@ -37,6 +37,32 @@ M.test_dirs = {
     __tests__ = true,
 }
 
+-- Colocated test files. React (and Go, and pytest) put the test next to the
+-- code it covers — Button.tsx / Button.test.tsx — so no path segment is ever
+-- a test folder and the folder rules above can't see them. Lua patterns,
+-- matched against the file name only.
+M.test_file_patterns = {
+    "%.test%.%w+$", -- Button.test.tsx, api.test.js
+    "%.spec%.%w+$", -- Button.spec.ts, app.component.spec.ts
+    "%.cy%.%w+$", -- Button.cy.tsx (cypress)
+    "%.e2e%-spec%.%w+$", -- app.e2e-spec.ts (nest)
+    "^test_.+%.py$", -- test_user.py (pytest default)
+    "_test%.py$",
+    "_test%.go$", -- user_test.go
+    "Test%.php$", -- UserTest.php (phpunit)
+    "Tests?%.cs$", -- UserTests.cs
+}
+
+-- Public: exposed so the patterns above can be reused/tested directly.
+function M.is_test_file(name)
+    for _, pattern in ipairs(M.test_file_patterns) do
+        if name:match(pattern) then
+            return true
+        end
+    end
+    return false
+end
+
 local tint_groups = {
     package = "NeoTreePackageTint",
     test = "NeoTreeTestTint",
@@ -68,13 +94,20 @@ function M.classify(path, root)
     if root and path:sub(1, #root) == root then
         path = path:sub(#root + 1)
     end
-    for segment in path:gmatch("[^/]+") do
+    local name
+    for segment in path:gmatch("[^/\\]+") do
         if M.package_dirs[segment] then
             return "package"
         end
         if M.test_dirs[segment] then
             return "test"
         end
+        name = segment
+    end
+    -- Only after the loop, so a colocated test inside node_modules stays
+    -- gray rather than flipping to green.
+    if name and M.is_test_file(name) then
+        return "test"
     end
 end
 

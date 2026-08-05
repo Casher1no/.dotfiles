@@ -17,24 +17,54 @@ local function set_python_path(command)
     end
 end
 
+local is_win = vim.fn.has("win32") == 1
+
+-- Interpreter inside a venv root: Scripts\python.exe on Windows, bin/python
+-- everywhere else. Returns nil when the file isn't there.
+local function venv_python(venv)
+    local candidate = venv .. (is_win and "/Scripts/python.exe" or "/bin/python")
+    if vim.uv.fs_stat(candidate) then
+        return candidate
+    end
+end
+
+-- Directory names people actually use for a project venv.
+local VENV_DIRS = { ".venv", "venv", ".virtualenv", "env" }
+
+-- Walk from `start` up to the filesystem root looking for a venv. Handles the
+-- monorepo case where the LSP root (nearest .git/pyproject.toml) sits below
+-- the directory that owns the venv.
+local function find_venv(start)
+    local dir = start
+    while dir do
+        for _, name in ipairs(VENV_DIRS) do
+            local python = venv_python(dir .. "/" .. name)
+            if python then
+                return python
+            end
+        end
+        local parent = vim.fs.dirname(dir)
+        if not parent or parent == dir then
+            return nil
+        end
+        dir = parent
+    end
+end
+
 ---@type vim.lsp.Config
 return {
     cmd = { "pyright-langserver", "--stdio" },
     filetypes = { "python" },
     -- Analyze with the project's virtualenv, not the system python:
-    -- $VIRTUAL_ENV when nvim was started inside one, else <root>/.venv
-    -- (the pip/uv/poetry default). Without this, imports installed in the
-    -- venv show as "could not be resolved".
+    -- $VIRTUAL_ENV when nvim was started inside one, else the nearest
+    -- .venv/venv/... at or above the project root. Without this, imports
+    -- installed in the venv show as "could not be resolved".
     before_init = function(_, config)
         local python
         if vim.env.VIRTUAL_ENV then
-            python = vim.env.VIRTUAL_ENV .. "/bin/python"
-        else
-            local candidate = (config.root_dir or vim.fn.getcwd()) .. "/.venv/bin/python"
-            if vim.uv.fs_stat(candidate) then
-                python = candidate
-            end
+            python = venv_python(vim.env.VIRTUAL_ENV)
         end
+        python = python or find_venv(config.root_dir or vim.fn.getcwd())
         if python then
             -- Mutate in place: the client already references this settings
             -- table, so replacing it (tbl_deep_extend) would be invisible.
@@ -89,5 +119,16 @@ return {
             nargs = 1,
             complete = "file",
         })
+
+        -- "Import could not be resolved" is almost always the wrong
+        -- interpreter; this says which one pyright actually picked.
+        vim.api.nvim_buf_create_user_command(bufnr, "LspPyrightPythonPath", function()
+            local settings = client.settings or client.config.settings or {}
+            local path = vim.tbl_get(settings, "python", "pythonPath")
+            vim.notify(
+                ("pyright root: %s\npythonPath: %s"):format(client.root_dir or "?", path or "(system python)"),
+                path and vim.log.levels.INFO or vim.log.levels.WARN
+            )
+        end, { desc = "Show the interpreter pyright is analyzing with" })
     end,
 }
