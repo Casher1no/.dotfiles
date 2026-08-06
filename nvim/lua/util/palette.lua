@@ -331,7 +331,7 @@ M.categories = {
         name = "LSP / Code",
         icon = "",
         items = {
-            { desc = "Go to definition (on def: references)", keys = "gd" },
+            { desc = "Definition + usages in one list", keys = "gd" },
             { desc = "Class usages / definition (styles)", keys = "gd / gr" },
             { desc = "Go to declaration", keys = "gD" },
             { desc = "Go to implementations", keys = "gi" },

@@ -1,8 +1,10 @@
--- JetBrains-style gd (bound in plugins/lsp.lua): on a usage it jumps to the
--- definition; pressed again on the definition itself it lists references —
--- so gr is never required. Folds in the special cases first: Inertia page
--- strings in PHP, template class names → stylesheet selector, and
--- stylesheet selectors → their usages (util/styleref.lua).
+-- gd (bound in plugins/lsp.lua) answers both navigation questions at once:
+-- it opens one picker with the definition(s) pinned on top and every usage
+-- below, so gr is never required. The definition is the first row, so <CR>
+-- immediately after gd is a plain jump-to-definition; a single result with
+-- no usages skips the picker entirely. Folds in the special cases first:
+-- Inertia page strings in PHP, template class names → stylesheet selector,
+-- and stylesheet selectors → their usages (util/styleref.lua).
 local M = {}
 
 -- Client start times, for the young-server retry below. Backfilled at module
@@ -65,7 +67,6 @@ function M.definition()
         return -- a selector IS its definition: gd on it = show usages
     end
 
-    local tb = require("telescope.builtin")
     local buf = vim.api.nvim_get_current_buf()
     local start_pos = vim.api.nvim_win_get_cursor(0)
 
@@ -104,31 +105,40 @@ function M.definition()
                     end, RETRY_MS)
                     return
                 end
-                tb.lsp_definitions() -- let telescope surface "no definitions"
+                -- No definition anywhere (a symbol the server can't resolve,
+                -- or one that only ever appears as usages) — still show the
+                -- usages rather than reporting "no definitions".
+                require("util.references").open()
                 return
             end
-            local cur_uri = vim.uri_from_bufnr(0)
-            local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+
+            -- One picker with the definition(s) pinned on top and every usage
+            -- below it, so gd answers both questions in a single press. The
+            -- definition is the first row, so <CR> straight away is the old
+            -- jump-to-definition behaviour.
+            --
+            -- Items are built here rather than via telescope's
+            -- lsp_definitions: that filters LSP results through
+            -- file_ignore_patterns (vendor/, node_modules/, …), silently
+            -- discarding definitions inside dependencies. Those patterns are
+            -- for search noise, not for explicit navigation.
+            local by_enc = {}
             for _, it in ipairs(locs) do
-                local uri = it.loc.uri or it.loc.targetUri
-                local range = it.loc.range or it.loc.targetSelectionRange
-                if uri == cur_uri and range and row >= range.start.line and row <= range["end"].line then
-                    -- Already at the definition — show where it's used instead
-                    -- (grouped picker: current file first, deduped).
-                    require("util.references").open()
-                    return
-                end
+                by_enc[it.enc] = by_enc[it.enc] or {}
+                table.insert(by_enc[it.enc], it.loc)
             end
-            -- Jump ourselves rather than via telescope's lsp_definitions:
-            -- telescope filters LSP results through file_ignore_patterns
-            -- (vendor/, node_modules/, …), silently discarding definitions
-            -- that live inside dependencies. The patterns are for search
-            -- noise, not for explicit navigation.
-            if #locs == 1 then
-                vim.lsp.util.show_document(locs[1].loc, locs[1].enc, { focus = true })
-                return
+            local def_items = {}
+            for enc, list in pairs(by_enc) do
+                vim.list_extend(def_items, vim.lsp.util.locations_to_items(list, enc))
             end
-            tb.lsp_definitions({ file_ignore_patterns = {} })
+            for _, item in ipairs(def_items) do
+                item.is_def = true
+            end
+            require("util.references").open({
+                prepend = def_items,
+                title = "Definition + usages",
+                jump_if_single = true, -- nothing to choose from → just go there
+            })
         end)
     end
     attempt(MAX_RETRIES)

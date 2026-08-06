@@ -69,9 +69,10 @@ return {
 
                 -- Navigation (telescope pickers show a code preview alongside the list)
                 local tb = require("telescope.builtin")
-                -- gd is JetBrains-style: usage → definition, definition →
-                -- references. Also Inertia-aware in PHP and class-aware in
-                -- templates/stylesheets. See util/goto.lua.
+                -- gd shows definition + usages in one picker (definition
+                -- first, so <CR> is a plain jump) — gr is only a shortcut to
+                -- the usages half. Also Inertia-aware in PHP and class-aware
+                -- in templates/stylesheets. See util/goto.lua.
                 vim.keymap.set("n", "gd", function()
                     require("util.goto").definition()
                 end, opts)

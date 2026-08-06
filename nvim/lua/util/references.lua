@@ -14,20 +14,27 @@ local M = {}
 
 -- Fetch, dedup and order reference items; cb(items, current_file).
 -- Separate from the picker so it can be tested headlessly.
-function M._gather(cb)
+-- opts.silent: report nothing and call cb({}) instead of bailing out, for
+-- callers (gd) that have definitions to show even when references are empty.
+function M._gather(cb, opts)
+    opts = opts or {}
     local win = vim.api.nvim_get_current_win()
     local buf = vim.api.nvim_get_current_buf()
     local word = vim.fn.expand("<cword>")
     local is_php = vim.bo[buf].filetype == "php"
     local clients = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })
     if #clients == 0 then
-        vim.notify("No attached LSP supports references here", vim.log.levels.WARN)
+        if opts.silent then
+            cb({}, vim.api.nvim_buf_get_name(buf))
+        else
+            vim.notify("No attached LSP supports references here", vim.log.levels.WARN)
+        end
         return
     end
     local encoding = clients[1].offset_encoding or "utf-16"
 
     local function finish(items)
-        if #items == 0 then
+        if #items == 0 and not opts.silent then
             vim.notify("No references found", vim.log.levels.INFO)
             return
         end
@@ -93,8 +100,41 @@ function M._gather(cb)
     end)
 end
 
-function M.open()
-    M._gather(function(items, current)
+-- opts.prepend: items pinned to the top of the list (gd passes the
+--   definitions, so one picker shows definition + usages together). Their
+--   lines are filtered out of the reference half so nothing appears twice.
+-- opts.title: picker title. opts.jump_if_single: skip the picker and jump
+--   when everything collapses to one location.
+function M.open(opts)
+    opts = opts or {}
+    local prepend = opts.prepend or {}
+    M._gather(function(refs, current)
+        local function key(item)
+            return vim.fn.fnamemodify(item.filename, ":p") .. ":" .. item.lnum
+        end
+        local items, seen = {}, {}
+        for _, it in ipairs(prepend) do
+            seen[key(it)] = true
+            items[#items + 1] = it
+        end
+        for _, it in ipairs(refs) do
+            if not seen[key(it)] then
+                seen[key(it)] = true
+                items[#items + 1] = it
+            end
+        end
+        if #items == 0 then
+            vim.notify("No definition or references found", vim.log.levels.INFO)
+            return
+        end
+        if opts.jump_if_single and #items == 1 then
+            local it = items[1]
+            vim.cmd("edit " .. vim.fn.fnameescape(it.filename))
+            pcall(vim.api.nvim_win_set_cursor, 0, { it.lnum, math.max(0, (it.col or 1) - 1) })
+            vim.cmd("normal! zz")
+            return
+        end
+
         local pickers = require("telescope.pickers")
         local finders = require("telescope.finders")
         local conf = require("telescope.config").values
@@ -104,9 +144,10 @@ function M.open()
             local text = vim.trim(item.text or "")
             -- ·grep = found by text search, not confirmed by the LSP
             -- (util/grepref.lua) — could be a same-named method elsewhere.
-            local suffix = item.via_grep and "  ·grep" or ""
+            -- ·def = the definition itself, pinned at the top by gd.
+            local suffix = item.is_def and "  ·def" or (item.via_grep and "  ·grep" or "")
             local display
-            if in_current then
+            if in_current and not item.is_def then
                 display = ("  %4d: %s%s"):format(item.lnum, text, suffix)
             else
                 display = ("%s:%d: %s%s"):format(vim.fn.fnamemodify(item.filename, ":."), item.lnum, text, suffix)
@@ -128,13 +169,13 @@ function M.open()
                 -- a reference (telescope filters picker entries through
                 -- file_ignore_patterns by default).
                 file_ignore_patterns = {},
-                prompt_title = "References — current file first",
+                prompt_title = opts.title or "References — current file first",
                 finder = finders.new_table({ results = items, entry_maker = entry_maker }),
                 sorter = conf.generic_sorter({}),
                 previewer = conf.qflist_previewer({}),
             })
             :find()
-    end)
+    end, { silent = #prepend > 0 })
 end
 
 return M
