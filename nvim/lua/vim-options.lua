@@ -124,6 +124,23 @@ vim.keymap.set({ "x", "n" }, "<leader>cl", function()
     require("util.ai.claude").add_lines()
 end, { desc = "Add line(s) to Claude Code" })
 
+-- / and ? search ignore case by default. No smartcase: a typed capital
+-- letter must not silently flip the search to case-sensitive — that's what
+-- the explicit toggle below is for.
+vim.opt.ignorecase = true
+vim.opt.smartcase = false
+
+-- Match-case toggle while typing a / or ? search — same key as in the
+-- Telescope pickers (util/telescope_case.lua). <C-s> adds/removes \C at the
+-- start of the pattern, which forces case-sensitivity regardless of
+-- 'ignorecase'. The live incsearch preview updates immediately, and n/N
+-- keep the chosen case because it's part of the pattern itself. A badge on
+-- the right side of the search popup shows the state (util/search_case.lua).
+vim.keymap.set("c", "<C-s>", function()
+    require("util.search_case").toggle()
+end, { desc = "Toggle match case (search)" })
+require("util.search_case").setup()
+
 -- Esc also closes an open K popup (docs/error, see util/hover.lua) and
 -- clears search highlight
 vim.keymap.set("n", "<Esc>", function()
