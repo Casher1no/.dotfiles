@@ -8,6 +8,9 @@ return {
     cmd = { "vue-language-server", "--stdio" },
     filetypes = { "vue" },
     root_markers = { "package.json" },
+    -- package.json matches any node project, so this only keeps stray single
+    -- .vue files (no workspace at all) from starting the server in single-file mode.
+    workspace_required = true,
     on_init = function(client)
         local retries = 0
 

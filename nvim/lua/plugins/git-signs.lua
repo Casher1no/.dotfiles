@@ -28,10 +28,31 @@ return {
             -- freshly `git add`ed new file is still "tracked", so
             -- attach_to_untracked above won't catch it, but every line would
             -- show as added (diffed against a HEAD that lacks the file).
+            -- The no-history answer requires git to walk the entire history,
+            -- so the check runs async and detaches after the fact (signs may
+            -- flash briefly) instead of blocking every buffer open; the hunk
+            -- keymaps below stay but no-op once detached.
             local filepath = vim.api.nvim_buf_get_name(bufnr)
-            local log = vim.fn.systemlist({ "git", "log", "-1", "--", filepath })
-            if vim.v.shell_error == 0 and #log == 0 then
-                return false
+            if filepath ~= "" then
+                pcall(
+                    vim.system,
+                    { "git", "log", "-1", "--oneline", "--", filepath },
+                    { cwd = vim.fs.dirname(filepath) },
+                    vim.schedule_wrap(function(out)
+                        -- The no-history answer is the slow one (full history
+                        -- walk) — long enough for :saveas / an LSP rename to
+                        -- repoint the buffer at a different file, so re-check
+                        -- the name before detaching.
+                        if
+                            out.code == 0
+                            and vim.trim(out.stdout or "") == ""
+                            and vim.api.nvim_buf_is_valid(bufnr)
+                            and vim.api.nvim_buf_get_name(bufnr) == filepath
+                        then
+                            require("gitsigns").detach(bufnr)
+                        end
+                    end)
+                )
             end
 
             local gs = require("gitsigns")

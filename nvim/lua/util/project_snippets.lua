@@ -20,21 +20,42 @@ local M = {}
 M.file = vim.fn.stdpath("config") .. "/data/project-snippets.json"
 M.GLOBAL_KEY = "*"
 
+-- read_all runs on every blink.cmp completion request (each keystroke in
+-- insert mode), so it can't afford a disk read + JSON decode per call.
+-- Keyed on mtime rather than a one-shot load so edits made outside this
+-- process (git pull, another nvim instance) are still picked up.
+local cache -- { data, sec, nsec }
+
 local function read_all()
+    local stat = vim.uv.fs_stat(M.file)
+    if not stat then
+        return {}
+    end
+    if cache and cache.sec == stat.mtime.sec and cache.nsec == stat.mtime.nsec then
+        return cache.data
+    end
     local f = io.open(M.file, "r")
     if not f then
         return {}
     end
     local content = f:read("*a")
     f:close()
-    if content == "" then
-        return {}
+    local data = {}
+    if content ~= "" then
+        local ok, decoded = pcall(vim.json.decode, content)
+        if ok and type(decoded) == "table" then
+            data = decoded
+        end
     end
-    local ok, data = pcall(vim.json.decode, content)
-    return (ok and type(data) == "table") and data or {}
+    cache = { data = data, sec = stat.mtime.sec, nsec = stat.mtime.nsec }
+    return data
 end
 
 local function write_all(data)
+    -- Callers mutate the table read_all handed out — possibly the cached
+    -- one — before writing, so drop the cache unconditionally: the next
+    -- read must reflect whatever actually landed on disk.
+    cache = nil
     vim.fn.mkdir(vim.fs.dirname(M.file), "p")
     -- Hand-rolled pretty printer (vim.json.encode is single-line) so the
     -- saved file stays readable and diffs cleanly in git.

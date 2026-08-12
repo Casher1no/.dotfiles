@@ -416,53 +416,6 @@ M.categories = {
         },
     },
     {
-        name = "Tests",
-        icon = "",
-        -- Neotest (see plugins/neotest.lua). "Nearest" = the test the cursor
-        -- is in, so run those from the buffer rather than from here.
-        items = {
-            { desc = "Run nearest test", keys = "<leader>tt", action = function() require("neotest").run.run() end },
-            {
-                desc = "Run current file",
-                keys = "<leader>tf",
-                action = function()
-                    require("neotest").run.run(vim.fn.expand("%"))
-                end,
-            },
-            {
-                desc = "Debug nearest test",
-                keys = "<leader>tD",
-                action = function()
-                    require("neotest").run.run({ strategy = "dap" })
-                end,
-            },
-            { desc = "Stop running tests", keys = "<leader>tS", action = function() require("neotest").run.stop() end },
-            {
-                desc = "Toggle summary tree",
-                keys = "<leader>ts",
-                action = function()
-                    require("neotest").summary.toggle()
-                end,
-            },
-            {
-                desc = "Show test output",
-                keys = "<leader>to",
-                action = function()
-                    require("neotest").output.open({ enter = true, auto_close = true })
-                end,
-            },
-            {
-                desc = "Toggle output panel",
-                keys = "<leader>tO",
-                action = function()
-                    require("neotest").output_panel.toggle()
-                end,
-            },
-            { desc = "Next failed test", keys = "]f" },
-            { desc = "Previous failed test", keys = "[f" },
-        },
-    },
-    {
         name = "Debug",
         icon = "",
         items = {
@@ -506,6 +459,19 @@ M.categories = {
             { desc = "Move selection up", keys = "K / <A-Up> (visual)" },
         },
     },
+    {
+        name = "Doctor",
+        icon = "",
+        -- Machine health: every dependency of this config (binaries, LSP
+        -- servers, parsers, fonts — see util/doctor/registry.lua) with its
+        -- install state, plus install/update actions. Rows repaint live as
+        -- the async probes and installers finish (the engine calls
+        -- M.refresh()). Also reachable as :Doctor / `:checkhealth doctor`.
+        dynamic = function()
+            return require("util.doctor").palette_items()
+        end,
+        items = {},
+    },
 }
 
 -- ---------------------------------------------------------------------------
@@ -531,6 +497,20 @@ local LEFT_W = 24
 local RIGHT_W = 48
 local GAP = 1
 local SEARCH_NS = vim.api.nvim_create_namespace("palette_search")
+local HL_NS = vim.api.nvim_create_namespace("palette_hl")
+
+-- Full-line highlight for rows whose item carries `hl` (the Doctor category
+-- colors its status rows). state.hl_map is rebuilt by the render functions.
+local function apply_hl()
+    vim.api.nvim_buf_clear_namespace(state.act_buf, HL_NS, 0, -1)
+    for lnum, group in pairs(state.hl_map or {}) do
+        vim.api.nvim_buf_set_extmark(state.act_buf, HL_NS, lnum - 1, 0, {
+            end_row = lnum,
+            end_col = 0,
+            hl_group = group,
+        })
+    end
+end
 
 local function close()
     -- Leave insert mode before the windows go away, so it doesn't leak into
@@ -570,6 +550,7 @@ local function render_browse()
     -- variable number of lines, so line number no longer maps to
     -- cat.items[line - 2] by fixed arithmetic.
     local line_map = {}
+    local hl_map = {}
     for _, item in ipairs(cat.items) do
         if item.section then
             -- A non-actionable section title (e.g. "Project Snippets"), not
@@ -582,7 +563,9 @@ local function render_browse()
             table.insert(lines, "  " .. item.desc)
         else
             local keys = item.keys or ""
-            local pad = width - 4 - #item.desc - #keys
+            -- Display width, not byte length: status glyphs (✓, ↑) and stars
+            -- are multibyte, and byte-based padding skews the keys column.
+            local pad = width - 4 - vim.fn.strdisplaywidth(item.desc) - vim.fn.strdisplaywidth(keys)
             if pad < 1 then
                 pad = 1
             end
@@ -593,11 +576,16 @@ local function render_browse()
             table.insert(lines, marker .. item.desc .. string.rep(" ", pad) .. keys)
             line_map[#lines] = item
         end
+        if item.hl then
+            hl_map[#lines] = item.hl
+        end
     end
     state.line_map = line_map
+    state.hl_map = hl_map
     vim.bo[state.act_buf].modifiable = true
     vim.api.nvim_buf_set_lines(state.act_buf, 0, -1, false, lines)
     vim.bo[state.act_buf].modifiable = false
+    apply_hl()
 end
 
 -- Recompute state.results for the current query. An item matches when every
@@ -639,23 +627,29 @@ local function render_search()
     local n = #state.results
     local lines = { "  " .. n .. (n == 1 and " match" or " matches"), "" }
     local line_map = {}
+    local hl_map = {}
     for i, r in ipairs(state.results) do
         local marker = (i == state.result_idx) and "▶ " or "  "
         local keys = r.item.keys or ""
-        local pad = RIGHT_W - 4 - #r.item.desc - #keys
+        local pad = RIGHT_W - 4 - vim.fn.strdisplaywidth(r.item.desc) - vim.fn.strdisplaywidth(keys)
         if pad < 1 then
             pad = 1
         end
         lines[#lines + 1] = marker .. r.item.desc .. string.rep(" ", pad) .. keys
         line_map[#lines] = r.item
+        if r.item.hl then
+            hl_map[#lines] = r.item.hl
+        end
     end
     if n == 0 then
         lines[#lines + 1] = "  (no matches)"
     end
     state.line_map = line_map
+    state.hl_map = hl_map
     vim.bo[state.act_buf].modifiable = true
     vim.api.nvim_buf_set_lines(state.act_buf, 0, -1, false, lines)
     vim.bo[state.act_buf].modifiable = false
+    apply_hl()
 end
 
 local function render_right()
@@ -669,6 +663,15 @@ end
 -- Run the action on the given right-pane line (1-based, including header rows).
 local function run_action(line)
     local item = state.line_map[line]
+    -- keep_open items (Doctor's install/update rows) run in place: the
+    -- palette stays up and re-renders, so async status changes show live.
+    if item and item.keep_open then
+        if item.action then
+            item.action()
+        end
+        M.refresh()
+        return
+    end
     -- Mark confirmed so close() keeps a previewed theme instead of reverting.
     if item then
         state.confirmed = true
@@ -696,7 +699,25 @@ function M.refresh()
         cat.items = cat.dynamic()
     end
     if state.query ~= "" then
+        -- update_search resets result_idx to 1 (right for a changed query,
+        -- wrong for an async repaint mid-navigation) — re-find the focused
+        -- item so Doctor's probe/install refreshes don't yank the selection
+        -- back to the top. Dynamic rebuilds recreate item tables, so match
+        -- by table identity first, then by description.
+        local focused = state.results[state.result_idx] and state.results[state.result_idx].item
+        local old_idx = state.result_idx
         update_search()
+        if focused then
+            for i, r in ipairs(state.results) do
+                if r.item == focused or r.item.desc == focused.desc then
+                    state.result_idx = i
+                    break
+                end
+            end
+        end
+        if state.result_idx == 1 and old_idx > 1 then
+            state.result_idx = math.min(old_idx, math.max(1, #state.results))
+        end
     end
     render_right()
 end
@@ -847,6 +868,14 @@ function M.open(category)
     local function select_category(delta)
         local n = #M.categories
         state.selected = ((state.selected - 1 + delta) % n) + 1
+        -- Rebuild dynamic categories on arrival, not just at open — Doctor's
+        -- probes finish after M.open baked its rows, and M.refresh only
+        -- repaints the *selected* category, so without this the rows would
+        -- freeze at their open-time "checking" state.
+        local cat = M.categories[state.selected]
+        if cat.dynamic then
+            cat.items = cat.dynamic()
+        end
         pcall(vim.api.nvim_win_set_cursor, state.cat_win, { state.selected, 0 })
         render_left()
         render_right()
@@ -933,6 +962,12 @@ function M.open(category)
             cat.on_focus(state.line_map[state.act_idx])
         end
     end
+    -- The act window is never focused in this mode, so scroll it manually to
+    -- keep the virtual selection visible (long lists — e.g. Doctor — exceed
+    -- the pane height).
+    local function follow_virtual_focus(line)
+        pcall(vim.api.nvim_win_set_cursor, state.act_win, { math.max(1, line), 0 })
+    end
     local function enter_act_pane()
         local first = first_actionable()
         if not first then
@@ -941,6 +976,7 @@ function M.open(category)
         state.pane = "act"
         state.act_idx = first
         render_right()
+        follow_virtual_focus(first)
         fire_on_focus()
     end
     -- Move the actions-pane selection, skipping header/section lines and
@@ -958,6 +994,7 @@ function M.open(category)
             if state.line_map[i] then
                 state.act_idx = i
                 render_right()
+                follow_virtual_focus(i)
                 fire_on_focus()
                 return
             end
@@ -975,6 +1012,7 @@ function M.open(category)
                 local n = #state.results
                 state.result_idx = ((state.result_idx - 1 + delta) % n) + 1
                 render_right()
+                follow_virtual_focus(state.result_idx + 2) -- +2: header rows
             end
         elseif state.pane == "act" then
             browse_act_move(delta)

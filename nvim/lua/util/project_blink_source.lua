@@ -22,7 +22,10 @@ local SNIPPET_KIND = (ok_types and types.CompletionItemKind and types.Completion
 
 function source:get_completions(ctx, callback)
     local bufname = vim.api.nvim_buf_get_name(ctx.bufnr)
-    local ext = vim.fn.fnamemodify(bufname, ":e")
+    -- Runs on every completion request, so no vim.fn round-trip. Same
+    -- semantics as fnamemodify(":e"): a dot starting the basename
+    -- (".bashrc") or ending the name ("foo.") is not an extension.
+    local ext = bufname:match("[^/.]%.([^/.]+)$") or ""
 
     local items = {}
     for _, entry in ipairs(require("util.project_snippets").list_for_ext(ext)) do

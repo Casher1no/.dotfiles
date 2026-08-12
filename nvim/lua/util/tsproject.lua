@@ -14,6 +14,24 @@ local CHUNK = 20 -- buffers loaded per event-loop tick, keeps the UI responsive
 
 local done_roots = {}
 
+-- Roots vtsls got from its getcwd() fallback (lsp/vtsls.lua) rather than a
+-- real project marker: nothing says the files beneath one form a project,
+-- and preloading there would bufload — and thereby LSP-attach — up to
+-- MAX_FILES unrelated files.
+local cwd_fallback_roots = {}
+
+function M.mark_cwd_fallback(root)
+    cwd_fallback_roots[root] = true
+end
+
+-- A marker-resolved root is proof the path really is a project: clear any
+-- stale fallback mark a stray file left on the same path (e.g. cwd sits on
+-- project A, a lone ~/Downloads snippet marked it, then a real A buffer
+-- opens — preload must work again).
+function M.unmark_cwd_fallback(root)
+    cwd_fallback_roots[root] = nil
+end
+
 -- Recursively gather source files under dir; exposed for headless tests.
 function M._collect(dir, acc)
     acc = acc or {}
@@ -64,7 +82,7 @@ end
 -- Called from the LspAttach autocmd (plugins/lsp.lua) for vtsls clients.
 function M.preload(client, bufnr)
     local root = client.root_dir
-    if not root or done_roots[root] then
+    if not root or done_roots[root] or cwd_fallback_roots[root] then
         return
     end
     done_roots[root] = true

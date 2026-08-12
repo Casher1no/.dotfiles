@@ -1,12 +1,12 @@
 vim.opt.termguicolors = true
 
-vim.cmd("set expandtab")
-vim.cmd("set tabstop=4")
-vim.cmd("set softtabstop=4")
-vim.cmd("set shiftwidth=4")
-vim.cmd("set wrap!")
-vim.cmd("set relativenumber")
-vim.cmd("set cursorline")
+vim.opt.expandtab = true
+vim.opt.tabstop = 4
+vim.opt.softtabstop = 4
+vim.opt.shiftwidth = 4
+vim.opt.wrap = false
+vim.opt.relativenumber = true
+vim.opt.cursorline = true
 
 vim.opt.scrolloff = 10
 
@@ -171,6 +171,22 @@ vim.keymap.set("v", "<leader>d", "d", { noremap = true })
 vim.keymap.set("n", "<leader><space>", function()
 	require("util.palette").open()
 end, { desc = "Command palette" })
+
+-- Doctor: dependency status + auto-install (util/doctor). No argument opens
+-- the palette's Doctor panel; `sync` is the headless bootstrap entry point
+-- (`nvim --headless "+Doctor sync"` — see bootstrap.sh at the repo root).
+vim.api.nvim_create_user_command("Doctor", function(o)
+	require("util.doctor").command(o.fargs)
+end, {
+	nargs = "*",
+	-- customlist semantics: nvim doesn't filter for us
+	complete = function(arg_lead)
+		return vim.tbl_filter(function(s)
+			return vim.startswith(s, arg_lead)
+		end, { "report", "sync", "install", "update", "log" })
+	end,
+	desc = "Dependency doctor: report / sync / install / update / log",
+})
 
 -- Run a saved project task (manage them in the palette → Project Commands)
 vim.keymap.set("n", "<leader>r", function()

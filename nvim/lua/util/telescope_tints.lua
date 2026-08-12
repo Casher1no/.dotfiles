@@ -24,6 +24,13 @@ local tint_groups = {
 -- (live_grep can hold thousands of results).
 local cache = {}
 
+-- Live TelescopeResults buffers, kept by the autocmds below. The decoration
+-- provider is global and permanent: once registered, on_win fires for every
+-- window on every redraw for the rest of the session (smear-cursor forces
+-- redraws at animation framerate), so its gate must be a plain table lookup
+-- — even a vim.bo option read is too hot there.
+local results_bufs = {}
+
 local function picker_for(results_bufnr)
     local state = require("telescope.state")
     for _, prompt_bufnr in ipairs(state.get_existing_prompt_bufnrs()) do
@@ -35,11 +42,19 @@ local function picker_for(results_bufnr)
 end
 
 -- Tint group for a results row, or nil. Separate from the provider callback
--- so it can be tested headlessly.
+-- so it can be tested headlessly. Runs per visible row per redraw, so no
+-- closure allocation here; picker.manager is nil until the finder produces
+-- results (telescope guards it the same way).
 function M._group_for_row(picker, row)
-    local ok, entry = pcall(function()
-        return picker.manager:get_entry(picker:get_index(row))
-    end)
+    local manager = picker.manager
+    if not manager then
+        return nil
+    end
+    local ok, index = pcall(picker.get_index, picker, row)
+    local entry
+    if ok then
+        ok, entry = pcall(manager.get_entry, manager, index)
+    end
     local filename = ok and entry and entry.filename
     if type(filename) ~= "string" then
         return nil
@@ -50,7 +65,7 @@ end
 
 vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, _, bufnr)
-        if vim.bo[bufnr].filetype ~= "TelescopeResults" then
+        if not results_bufs[bufnr] then
             return false
         end
         local tick = vim.api.nvim_buf_get_changedtick(bufnr)
@@ -91,10 +106,23 @@ vim.api.nvim_set_decoration_provider(ns, {
     end,
 })
 
+local group = vim.api.nvim_create_augroup("telescope_tints", { clear = true })
+
+-- Telescope sets this filetype on every results buffer it creates
+-- (pickers.lua, nvim_set_option_value on results_bufnr).
+vim.api.nvim_create_autocmd("FileType", {
+    group = group,
+    pattern = "TelescopeResults",
+    callback = function(args)
+        results_bufs[args.buf] = true
+    end,
+})
+
 -- Telescope wipes its results buffers on close; drop their cache entries.
 vim.api.nvim_create_autocmd("BufWipeout", {
-    group = vim.api.nvim_create_augroup("telescope_tints", { clear = true }),
+    group = group,
     callback = function(args)
+        results_bufs[args.buf] = nil
         cache[args.buf] = nil
     end,
 })

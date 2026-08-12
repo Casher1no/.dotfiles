@@ -11,5 +11,8 @@ return {
         damping = 0.95,
         damping_insert_mode = 0.95,
         distance_stop_animating = 0.5,
+        -- Telescope's prompt redraws on every keystroke; animating a smear
+        -- on top of that forces extra redraws and makes typing feel laggy.
+        filetypes_disabled = { "TelescopePrompt" },
     },
 }

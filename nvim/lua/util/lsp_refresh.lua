@@ -20,12 +20,15 @@ local uv = vim.uv
 local Created, Changed, Deleted = 1, 2, 3
 
 local SCAN_GAP_MS = 5000 -- min time between snapshot scans per root
+local IDLE_GAP_MS = 30000 -- wider gap for passive idle (CursorHold) scans
 local HEAL_COOLDOWN_MS = 30000 -- min time between heals of the same file/client
 
 local snapshots = {} -- root -> { relpath -> mtime }
 local scanning = {} -- root -> true while a scan is in flight
 local last_scan = {} -- root -> uv.now() of last started scan
+local scan_output = {} -- root -> raw stdout of the last scan
 local healed = {} -- client_id .. ":" .. uri -> uv.now() of last heal
+local attempts = {} -- client_id .. ":" .. kind .. ":" .. name -> uv.now() of last lookup
 
 -- ---------------------------------------------------------------- watch bridge
 
@@ -37,8 +40,16 @@ local function scan_root(root, cb)
         "-c",
         "git ls-files -co --exclude-standard -z 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null",
     }, { cwd = root, text = true }, function(out)
+        local stdout = out.stdout or ""
+        -- Byte-identical output means identical paths and mtimes, so the
+        -- parse and the snapshot diff would be pure waste.
+        if scan_output[root] == stdout then
+            cb(nil)
+            return
+        end
+        scan_output[root] = stdout
         local snap = {}
-        for line in (out.stdout or ""):gmatch("[^\n]+") do
+        for line in stdout:gmatch("[^\n]+") do
             local mtime, path = line:match("^(%d+) (.+)$")
             if mtime then
                 snap[path] = mtime
@@ -81,9 +92,7 @@ local function diff_and_notify(root, snap)
     end
 end
 
---- Rescan every active client root and tell servers what changed on disk.
----@param force boolean|nil skip the per-root throttle
-function M.refresh(force)
+local function refresh(force, gap)
     local roots = {}
     for _, client in ipairs(vim.lsp.get_clients()) do
         local root = client.root_dir
@@ -94,21 +103,39 @@ function M.refresh(force)
             roots[root] = true
         end
     end
+    -- Drop caches for roots whose last client is gone — the raw stdout cache
+    -- alone can hold megabytes per large project, and project-hopping in one
+    -- session would otherwise accumulate them forever.
+    for _, cache in ipairs({ scan_output, snapshots, last_scan }) do
+        for root in pairs(cache) do
+            if not roots[root] and not scanning[root] then
+                cache[root] = nil
+            end
+        end
+    end
     for root in pairs(roots) do
         local now = uv.now()
-        if not scanning[root] and (force or not last_scan[root] or now - last_scan[root] > SCAN_GAP_MS) then
+        if not scanning[root] and (force or not last_scan[root] or now - last_scan[root] > gap) then
             scanning[root] = true
             last_scan[root] = now
             scan_root(root, function(snap)
                 vim.schedule(function()
                     scanning[root] = nil
-                    if next(snap) then -- empty result = git failed, keep old baseline
+                    -- nil = output identical to last scan; empty = git failed.
+                    -- Keep the old baseline either way.
+                    if snap and next(snap) then
                         diff_and_notify(root, snap)
                     end
                 end)
             end)
         end
     end
+end
+
+--- Rescan every active client root and tell servers what changed on disk.
+---@param force boolean|nil skip the per-root throttle
+function M.refresh(force)
+    refresh(force, SCAN_GAP_MS)
 end
 
 -- ------------------------------------------------------------- diagnostic heal
@@ -128,10 +155,18 @@ local PATTERNS = {
 
 -- Feed a file to the server as if it were opened in a window, then close it
 -- again — forces the server to (re)read it without touching the UI.
-local function phantom_open(client, path)
+-- attempt_key: the caller's `attempts` stamp, re-stamped here so both
+-- cooldown clocks tick from the same instant — stamped only at dispatch,
+-- they drift apart by the lookup's latency, and a retry landing in that
+-- drift window passes the attempts gate only to have the still-fresh healed
+-- stamp drop its didOpen.
+local function phantom_open(client, path, attempt_key)
     local bufnr = vim.fn.bufnr(path)
     if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
         return -- a real buffer exists; autoread/checktime keeps that fresh
+    end
+    if attempt_key then
+        attempts[attempt_key] = uv.now()
     end
     local uri = vim.uri_from_fname(path)
     local key = client.id .. ":" .. uri
@@ -176,7 +211,7 @@ local function resolve_module(spec, from_file)
     end
 end
 
-local function heal_symbol(client, name)
+local function heal_symbol(client, name, attempt_key)
     if not client:supports_method("workspace/symbol") then
         return
     end
@@ -187,7 +222,7 @@ local function heal_symbol(client, name)
         for _, sym in ipairs(result) do
             local uri = sym.location and sym.location.uri
             if sym.name == name and uri and uri:sub(1, 7) == "file://" then
-                phantom_open(client, vim.uri_to_fname(uri))
+                phantom_open(client, vim.uri_to_fname(uri), attempt_key)
                 return
             end
         end
@@ -196,7 +231,7 @@ end
 
 -- Angular: "'app-user-card' is not a known element" — grep the project for
 -- the component that declares that selector and feed it to the server.
-local function heal_selector(client, selector)
+local function heal_selector(client, selector, attempt_key)
     if not client.root_dir then
         return
     end
@@ -211,32 +246,61 @@ local function heal_selector(client, selector)
     }, { text = true }, function(out)
         vim.schedule(function()
             for path in (out.stdout or ""):gmatch("[^\n]+") do
-                phantom_open(client, path)
+                phantom_open(client, path, attempt_key)
             end
         end)
     end)
 end
 
-local function heal_buffer(bufnr)
+-- Drop stamps past their cooldown: they block nothing anymore, and the tables
+-- otherwise keep one entry per client × name for the whole session.
+local function prune_heal_stamps()
+    local now = uv.now()
+    for _, stamps in ipairs({ healed, attempts }) do
+        for key, ts in pairs(stamps) do
+            if now - ts >= HEAL_COOLDOWN_MS then
+                stamps[key] = nil
+            end
+        end
+    end
+end
+
+-- force (the :LspRefresh path) bypasses the attempts cooldown: the user is
+-- explicitly saying "things changed, look again" — e.g. the missing module
+-- was just created and its failed lookup is still inside the cooldown.
+local function heal_buffer(bufnr, force)
     if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].buftype ~= "" then
         return
     end
+    prune_heal_stamps()
     local from_file = vim.api.nvim_buf_get_name(bufnr)
     for _, diag in ipairs(vim.diagnostic.get(bufnr, { severity = vim.diagnostic.severity.ERROR })) do
         for _, rule in ipairs(PATTERNS) do
             local capture = diag.message:match(rule.pat)
             if capture then
                 for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+                    -- Stamped before the lookup runs, so a name the search
+                    -- can't resolve (typo'd selector, deleted module) isn't
+                    -- re-searched on every diagnostic burst while it lingers.
+                    local key = client.id .. ":" .. rule.kind .. ":" .. capture
                     if rule.kind == "module" then
-                        local path = resolve_module(capture, from_file)
-                        if path then
-                            phantom_open(client, path)
+                        -- Module specs are relative to the importing file:
+                        -- "./util" in src/a and in src/b are different lookups.
+                        key = key .. ":" .. vim.fs.dirname(from_file)
+                    end
+                    if force or not attempts[key] or uv.now() - attempts[key] >= HEAL_COOLDOWN_MS then
+                        attempts[key] = uv.now()
+                        if rule.kind == "module" then
+                            local path = resolve_module(capture, from_file)
+                            if path then
+                                phantom_open(client, path, key)
+                            end
+                        elseif rule.kind == "selector" then
+                            heal_selector(client, capture, key)
+                        else
+                            local name = rule.kind == "java_import" and capture:match("([%w_]+)$") or capture
+                            heal_symbol(client, name, key)
                         end
-                    elseif rule.kind == "selector" then
-                        heal_selector(client, capture)
-                    else
-                        local name = rule.kind == "java_import" and capture:match("([%w_]+)$") or capture
-                        heal_symbol(client, name)
                     end
                 end
                 break -- first matching pattern wins for this diagnostic
@@ -262,7 +326,9 @@ function M.setup()
     vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
         group = group,
         callback = function()
-            M.refresh() -- throttled by SCAN_GAP_MS, cheap when nothing changed
+            -- Idle polling only backstops the focus/terminal events above, so
+            -- it runs at the wider IDLE_GAP_MS.
+            refresh(nil, IDLE_GAP_MS)
         end,
     })
 
@@ -279,7 +345,8 @@ function M.setup()
             pending[bufnr] = true
             vim.defer_fn(function()
                 pending[bufnr] = nil
-                M.refresh()
+                -- Heal only: diagnostics raised by in-editor edits say
+                -- nothing about external file changes, so no rescan here.
                 heal_buffer(bufnr)
             end, 800)
         end,
@@ -289,7 +356,7 @@ function M.setup()
         M.refresh(true)
         for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
             if vim.api.nvim_buf_is_loaded(bufnr) then
-                heal_buffer(bufnr)
+                heal_buffer(bufnr, true)
             end
         end
         vim.notify("LSP: rescanned project files and healed stale references", vim.log.levels.INFO)

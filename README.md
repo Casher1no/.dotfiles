@@ -1,20 +1,35 @@
 # Dotfiles — Neovim config
 
-## Requirements
+## Setup (macOS / Linux)
 
-- Neovim ≥ 0.11
-- Git
-- A Nerd Font (e.g. JetBrainsMono Nerd Font) set in your terminal
-- ripgrep (`rg`) — for Telescope live grep
-- Node.js — for several LSP servers
-- (Optional, per language) JDK 21 (Java), .NET SDK (C#), PHP + Xdebug
+```sh
+git clone <repo-url> ~/Projects/.dotfiles
+~/Projects/.dotfiles/bootstrap.sh
+```
 
-## Mac setup
+That's it. `bootstrap.sh` installs the core tools (Homebrew/apt), symlinks
+`~/.config/nvim` into the repo, and runs `nvim --headless "+Doctor sync"`,
+which installs the plugins (pinned by `lazy-lock.json`), the treesitter
+parsers and every LSP/DAP server via mason.
 
-- Install tools: `brew install neovim git ripgrep node`
-- Clone this repo: `git clone <repo-url> ~/.dotfiles`
-- Symlink the config: `ln -s ~/.dotfiles/nvim ~/.config/nvim`
-- Launch `nvim` — plugins and LSP/DAP tools install automatically on first run
+Set a **Nerd Font** in your terminal (e.g. JetBrainsMono Nerd Font) — the
+one thing a script can't do for you.
+
+## Doctor
+
+The config knows its own dependencies (`nvim/lua/util/doctor/registry.lua`)
+and can check, install and update them:
+
+- `<leader><space>` → **Doctor** — live status panel in the command palette:
+  ✓ installed, ✗ missing, ↑ update available. `⏎` on a row installs that
+  dependency; bottom actions install everything missing, check brew/mason
+  for updates, or update everything outdated.
+- `:Doctor` — opens the same panel. `:Doctor report | sync | install |
+  update | log` for the non-interactive flavors.
+- `:checkhealth doctor` — the same probes through nvim's health UI.
+
+Optional per-language stacks (PHP, Python, JDK 21, .NET SDK) show as
+warnings, not errors, until you install them.
 
 ## Windows setup
 
@@ -22,4 +37,5 @@
 - Clone this repo: `git clone <repo-url> $HOME\.dotfiles`
 - Symlink the config (run PowerShell as Administrator):
   `New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\nvim" -Target "$HOME\.dotfiles\nvim"`
-- Launch `nvim` — plugins and LSP/DAP tools install automatically on first run
+- Run `nvim --headless "+Doctor sync"`, or just launch `nvim` and open the
+  Doctor panel.

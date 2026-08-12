@@ -93,6 +93,12 @@ return {
                     },
                 },
                 sorting_strategy = "ascending", -- best match directly under the prompt
+                -- The preview re-renders on every selection change while
+                -- typing — cap it so one big file can't stall the picker.
+                preview = {
+                    filesize_limit = 1, -- MB
+                    timeout = 250, -- ms
+                },
                 path_display = { "truncate" },
                 file_ignore_patterns = file_ignore_patterns,
                 mappings = {

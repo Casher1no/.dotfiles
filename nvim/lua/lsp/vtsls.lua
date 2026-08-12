@@ -48,7 +48,17 @@ return {
             return
         end
 
-        local project_root = vim.fs.root(bufnr, root_markers) or vim.fn.getcwd()
+        local project_root = vim.fs.root(bufnr, root_markers)
+        if not project_root then
+            -- Stray files still get single-file support rooted at the cwd,
+            -- but that root is arbitrary (could be $HOME) — flag it so
+            -- util/tsproject.lua never preloads the tree beneath it.
+            project_root = vim.fn.getcwd()
+            require("util.tsproject").mark_cwd_fallback(project_root)
+        else
+            -- A real marker outranks a stale fallback mark on the same path.
+            require("util.tsproject").unmark_cwd_fallback(project_root)
+        end
         on_dir(project_root)
     end,
 }

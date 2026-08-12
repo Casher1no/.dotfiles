@@ -1,7 +1,13 @@
 return {
     {
         "zaldih/themery.nvim",
-        lazy = false,
+        -- The persisted theme is applied at startup by catppuccin's config
+        -- below, straight from themery's state file, so themery only has to
+        -- load for the picker and for persisting a new choice. The command
+        -- palette's require("themery") (util/palette.lua, Themes category)
+        -- auto-loads it too; its previews use plain vim.cmd.colorscheme and
+        -- never touch themery.
+        cmd = "Themery",
         config = function()
             local config = require("themery")
             -- Upstream bug (themery bfa58f4): normalizePaths() reads the
@@ -46,29 +52,32 @@ return {
         end,
     },
 
-    -- themes
+    -- themes: all lazy. lazy.nvim's ColorSchemePre autocmd loads whichever
+    -- unloaded plugin ships colors/<name> when :colorscheme asks for it
+    -- (lazy.nvim loader.lua M.colorscheme), so the startup apply below,
+    -- themery's live preview and the palette previews all keep working.
     {
         "rebelot/kanagawa.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "ellisonleao/gruvbox.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "nyoom-engineering/oxocarbon.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         -- One Dark Pro. Provides the "onedark" colorscheme (plus onelight,
         -- onedark_vivid, onedark_dark).
         "olimorris/onedarkpro.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "rose-pine/neovim",
         name = "rose-pine",
-        lazy = false,
+        lazy = true,
     },
     {
         "catppuccin/nvim",
@@ -77,27 +86,45 @@ return {
         priority = 1000,
 
         config = function()
-            vim.cmd.colorscheme("catppuccin")
+            -- Apply the theme themery persisted without loading themery, so
+            -- exactly one colorscheme runs per startup. State format (themery
+            -- bfa58f4, persistence.lua saveTheme): stdpath("data")/themery/
+            -- state.json, JSON with a "colorscheme" string. Its before/after
+            -- code fields are ignored here — the themes list above registers
+            -- plain strings, so they are always empty. Catppuccin is the
+            -- fallback when there is no usable state.
+            local applied = false
+            local file = io.open(vim.fn.stdpath("data") .. "/themery/state.json", "r")
+            if file then
+                local ok, state = pcall(vim.json.decode, file:read("*a"))
+                file:close()
+                if ok and type(state) == "table" and type(state.colorscheme) == "string" then
+                    applied = pcall(vim.cmd.colorscheme, state.colorscheme)
+                end
+            end
+            if not applied then
+                vim.cmd.colorscheme("catppuccin")
+            end
         end,
     },
     {
         "neanias/everforest-nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "scottmckendry/cyberdream.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "Mofiqul/vscode.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "Mofiqul/dracula.nvim",
-        lazy = false,
+        lazy = true,
     },
     {
         "gbprod/nord.nvim",
-        lazy = false,
+        lazy = true,
     },
 }

@@ -11,6 +11,10 @@ return {
         -- to the LSP provider there.
         large_file_cutoff = 3000,
         large_file_overrides = { providers = { "lsp" } },
+        -- No occurrence scans per keystroke in Telescope's prompt buffer.
+        -- configure() replaces the default denylist instead of merging, so
+        -- the plugin's defaults (dirbuf, dirvish, fugitive) are repeated.
+        filetypes_denylist = { "dirbuf", "dirvish", "fugitive", "TelescopePrompt" },
     },
     config = function(_, opts)
         -- vim-illuminate uses configure(), not setup(), so `opts` alone

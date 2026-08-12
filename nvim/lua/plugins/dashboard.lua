@@ -40,6 +40,9 @@ end
 
 -- Dashboard action keys. Prepends "Continue — <project>" when a previous
 -- project was recorded, so it always sits at the top.
+-- Passed below by reference, not called: snacks resolves function-valued
+-- preset fields when the dashboard renders, so the session lookup (file read
+-- + session-dir glob) never runs on startups that open a file directly.
 local function dashboard_keys()
     local keys = {}
     local last = require("util.session").get()
@@ -100,7 +103,7 @@ return {
 ╚██████╗██║  ██║███████║██║  ██║███████╗██║  ██║ ██║██║ ╚████║╚██████╔╝
  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝
                 ]],
-                keys = dashboard_keys(),
+                keys = dashboard_keys,
             },
             sections = {
                 { section = "header" },

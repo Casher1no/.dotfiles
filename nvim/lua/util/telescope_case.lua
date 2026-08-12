@@ -83,12 +83,65 @@ local function sensitive_file_sorter()
     return sorter
 end
 
+-- Highlight the typed query inside the grep preview (JetBrains-style: every
+-- occurrence of the searched word lights up, not just the matched line).
+-- The preview WINDOW survives entry switches, so one window-local matchadd
+-- covers every previewed file; it's refreshed on each prompt edit and its
+-- case-sensitivity follows the <C-s> state. TelescopePreviewMatch is the
+-- group telescope's own previewers use (links to Search).
+local function attach_preview_highlight(prompt_bufnr, sensitive)
+    local match_id
+    local function update()
+        local action_state = require("telescope.actions.state")
+        local picker = action_state.get_current_picker(prompt_bufnr)
+        local pstate = picker and picker.previewer and picker.previewer.state
+        local win = pstate and pstate.winid
+        if not (win and vim.api.nvim_win_is_valid(win)) then
+            return
+        end
+        vim.api.nvim_win_call(win, function()
+            if match_id then
+                pcall(vim.fn.matchdelete, match_id)
+                match_id = nil
+            end
+            local query = vim.trim(action_state.get_current_line() or "")
+            if query == "" then
+                return
+            end
+            local case = sensitive and "\\C" or "\\c"
+            -- rg treats the prompt as a regex; very-magic covers the common
+            -- syntax (|, (), +, ?, []). An unparsable pattern falls back to
+            -- a literal match so partial regexes don't flash errors mid-typing.
+            local ok, id = pcall(vim.fn.matchadd, "TelescopePreviewMatch", case .. "\\v" .. query)
+            if not ok then
+                ok, id = pcall(vim.fn.matchadd, "TelescopePreviewMatch", case .. "\\V" .. vim.fn.escape(query, "\\"))
+            end
+            match_id = ok and id or nil
+        end)
+    end
+    -- buf_attach rather than TextChanged autocmds: it fires for every way
+    -- the prompt can change (typing, <C-v> paste, API edits). Detaches
+    -- automatically when telescope wipes the prompt buffer on close.
+    vim.api.nvim_buf_attach(prompt_bufnr, false, {
+        on_lines = function()
+            vim.schedule(update)
+        end,
+    })
+    -- Initial paint for relaunches carrying default_text — deferred because
+    -- the previewer window only exists after the first results render (every
+    -- later keystroke re-runs update anyway, so a miss here self-heals).
+    vim.defer_fn(update, 100)
+end
+
 -- state = { sensitive = bool, no_tests = bool }
 local function launch(name, state, text)
     local opts = {
         default_text = text,
         attach_mappings = function(prompt_bufnr, map)
             place_badge(prompt_bufnr, state)
+            if name == "live_grep" then
+                attach_preview_highlight(prompt_bufnr, state.sensitive)
+            end
             -- Relaunch the same picker with one flag flipped, keeping the query.
             local function toggle(flag)
                 return function()
@@ -113,6 +166,10 @@ local function launch(name, state, text)
     end
 
     if name == "live_grep" then
+        -- live_grep respawns rg on every keystroke; debounce so fast typing
+        -- doesn't fork a process per character. find_files stays undebounced —
+        -- its per-keystroke filter is in-memory and instant feel matters more.
+        opts.debounce = 80
         -- Explicit flag either way, otherwise rg falls back to --smart-case
         -- from the default vimgrep_arguments.
         opts.additional_args = { state.sensitive and "--case-sensitive" or "--ignore-case" }

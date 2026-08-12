@@ -59,4 +59,25 @@ return {
         -- falls back to a Lua matcher if the prebuilt binary is unavailable
         fuzzy = { implementation = "prefer_rust_with_warning" },
     },
+    config = function(_, opts)
+        require("blink.cmp").setup(opts)
+        -- Drift guard for the capability copy hardcoded in util/lsp_caps.lua
+        -- (advertised to servers without loading blink at startup): if a
+        -- blink update changes get_lsp_capabilities, warn that the copy is
+        -- stale. Compared against the copy itself, not vim.lsp.config["*"] —
+        -- blink's own plugin file (and potentially other plugins) merge into
+        -- that table on load, which would false-positive the check.
+        vim.schedule(function()
+            pcall(function()
+                local want = require("blink.cmp").get_lsp_capabilities({}, true).textDocument.completion
+                local have = require("util.lsp_caps")().textDocument.completion
+                if not vim.deep_equal(want, have) then
+                    vim.notify(
+                        "blink.cmp's LSP capabilities changed upstream — update the hardcoded table in util/lsp_caps.lua",
+                        vim.log.levels.WARN
+                    )
+                end
+            end)
+        end)
+    end,
 }

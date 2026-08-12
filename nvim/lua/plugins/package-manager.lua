@@ -1,6 +1,9 @@
 return {
     {
         "mason-org/mason.nvim",
+        -- Stays eager: setup() prepends mason/bin to PATH
+        -- (mason-core/installer/InstallLocation.lua set_env), which spawned
+        -- language servers must inherit.
         opts = {
             ui = {
                 icons = {
@@ -13,9 +16,13 @@ return {
     },
     {
         "mason-org/mason-lspconfig.nvim",
+        -- With automatic_enable = false (below) its only job is the
+        -- ensure_installed check, which needn't block startup — and it never
+        -- requires nvim-lspconfig, so that isn't a dependency (depending on it
+        -- would force-load lspconfig past its BufReadPre gate).
+        event = "VeryLazy",
         dependencies = {
             "mason-org/mason.nvim",
-            "neovim/nvim-lspconfig",
         },
         opts = {
             -- Servers installed automatically on first launch.

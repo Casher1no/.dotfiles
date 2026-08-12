@@ -1,5 +1,13 @@
 return {
     "neovim/nvim-lspconfig",
+    -- BufReadPre fires before FileType, so vim.lsp.enable below registers its
+    -- FileType autocmd in time for the first opened file; for buffers loaded
+    -- before this plugin, vim.lsp.enable replays the event itself (doautoall
+    -- in runtime vim/lsp.lua). StdinReadPre covers `nvim -` sessions. Known
+    -- gap, accepted: a pure `:enew` + `:set ft=…` scratch buffer before any
+    -- real file open gets no LSP (FileType can't join this list — the
+    -- dashboard buffer sets a filetype and would defeat the gate).
+    event = { "BufReadPre", "BufNewFile", "StdinReadPre" },
     config = function()
         local servers = {
             "lua_ls",
@@ -18,13 +26,10 @@ return {
         }
 
         -- Advertise blink.cmp's richer completion capabilities to every server
-        -- (snippets, auto-import / additionalTextEdits, resolve support, ...).
-        local capabilities = vim.lsp.protocol.make_client_capabilities()
-        local ok_blink, blink = pcall(require, "blink.cmp")
-        if ok_blink then
-            capabilities = blink.get_lsp_capabilities(capabilities)
-        end
-        vim.lsp.config("*", { capabilities = capabilities })
+        -- (snippets, auto-import / additionalTextEdits, resolve support, ...)
+        -- without loading blink at startup — see util/lsp_caps.lua for the
+        -- hardcoded table and its drift guard.
+        vim.lsp.config("*", { capabilities = require("util.lsp_caps")() })
 
         for _, server in ipairs(servers) do
             local config = require("lsp." .. server)
@@ -57,6 +62,13 @@ return {
                     require("util.tsproject").preload(client, bufnr)
                 end
 
+                -- Everything below is per-buffer, not per-client; php buffers
+                -- attach 3+ servers, so only register the maps on the first
+                -- attach.
+                if vim.b[bufnr].lsp_keymaps then
+                    return
+                end
+
                 local opts = { buffer = bufnr, silent = true }
 
                 -- Hover and signature help. K is diagnostics-aware: on a
@@ -67,8 +79,9 @@ return {
                 end, opts)
                 vim.keymap.set("i", "<C-k>", vim.lsp.buf.signature_help, opts)
 
-                -- Navigation (telescope pickers show a code preview alongside the list)
-                local tb = require("telescope.builtin")
+                -- Navigation (telescope pickers show a code preview alongside
+                -- the list; telescope is required inside the closures so it
+                -- isn't loaded on attach, only on first use)
                 -- gd shows definition + usages in one picker (definition
                 -- first, so <CR> is a plain jump) — gr is only a shortcut to
                 -- the usages half. Also Inertia-aware in PHP and class-aware
@@ -77,8 +90,12 @@ return {
                     require("util.goto").definition()
                 end, opts)
                 vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
-                vim.keymap.set("n", "gi", tb.lsp_implementations, opts)
-                vim.keymap.set("n", "go", tb.lsp_type_definitions, opts)
+                vim.keymap.set("n", "gi", function()
+                    require("telescope.builtin").lsp_implementations()
+                end, opts)
+                vim.keymap.set("n", "go", function()
+                    require("telescope.builtin").lsp_type_definitions()
+                end, opts)
                 -- gr in a stylesheet on .class/#id finds usages across
                 -- templates (util/styleref.lua); otherwise the grouped
                 -- references picker (util/references.lua).
@@ -88,7 +105,9 @@ return {
                     end
                     require("util.references").open()
                 end, opts)
-                vim.keymap.set("n", "gs", tb.lsp_document_symbols, opts)
+                vim.keymap.set("n", "gs", function()
+                    require("telescope.builtin").lsp_document_symbols()
+                end, opts)
 
                 -- Call hierarchy: who calls this (incoming) / what it calls
                 -- (outgoing). Answers "what uses this method" as a navigable tree.
@@ -108,6 +127,8 @@ return {
                 vim.keymap.set("n", "]d", vim.diagnostic.goto_next, opts)
                 vim.keymap.set("n", "<leader>of", vim.diagnostic.open_float, opts)
                 vim.keymap.set("n", "<leader>q", vim.diagnostic.setloclist, opts)
+
+                vim.b[bufnr].lsp_keymaps = true
             end,
         })
 

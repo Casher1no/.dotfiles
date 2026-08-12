@@ -15,7 +15,8 @@ return {
         local function workspace_for(root)
             root = root or vim.fn.getcwd()
             local hash = vim.fn.sha256(root):sub(1, 16)
-            return vim.fn.expand("~/Library/Caches/jdtls/ws-")
+            return vim.fn.stdpath("cache")
+                .. "/jdtls/ws-"
                 .. vim.fn.fnamemodify(root, ":t")
                 .. "-"
                 .. hash

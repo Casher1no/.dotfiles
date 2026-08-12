@@ -23,22 +23,39 @@ end
 
 return {
     "shortcuts/no-neck-pain.nvim",
-    cmd = "NoNeckPain",
-    -- Load at startup (not just on-demand) so a previously-enabled state can
-    -- be restored automatically.
-    event = "VimEnter",
+    -- The full command set, not just :NoNeckPain — lazy stubs only what's
+    -- listed, and e.g. :NoNeckPainResize before the first toggle would
+    -- otherwise be E492 (the plugin defines these in plugin/no-neck-pain.lua).
+    cmd = {
+        "NoNeckPain",
+        "NoNeckPainResize",
+        "NoNeckPainWidthUp",
+        "NoNeckPainWidthDown",
+        "NoNeckPainToggleLeftSide",
+        "NoNeckPainToggleRightSide",
+        "NoNeckPainScratchPad",
+        "NoNeckPainDebug",
+    },
     keys = {
         { "<leader>zz", toggle, desc = "Toggle centered view" },
     },
+    -- init runs on every startup while the plugin stays unloaded; the plugin
+    -- is only pulled in (through its :NoNeckPain command stub) when the
+    -- marker file says centering was left enabled. Deferred to a tick after
+    -- VimEnter so it centers against the final startup window layout.
+    init = function()
+        if was_enabled() then
+            vim.api.nvim_create_autocmd("VimEnter", {
+                once = true,
+                callback = function()
+                    vim.schedule(function()
+                        vim.cmd("NoNeckPain")
+                    end)
+                end,
+            })
+        end
+    end,
     opts = {
         width = 150,
     },
-    config = function(_, opts)
-        require("no-neck-pain").setup(opts)
-        if was_enabled() then
-            vim.schedule(function()
-                vim.cmd("NoNeckPain")
-            end)
-        end
-    end,
 }

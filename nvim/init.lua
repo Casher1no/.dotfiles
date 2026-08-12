@@ -32,22 +32,18 @@ require("lazy").setup("plugins", opts)
 vim.api.nvim_create_autocmd('FileType', {
   pattern = 'php',
   callback = function(args)
+    -- The server is an optional out-of-tree project; skip when it isn't
+    -- checked out on this machine so PHP buffers don't spawn a failing php.
+    local server = vim.fn.expand("~/Projects/better-php-sense/bin/server.php")
+    if not vim.uv.fs_stat(server) then
+      return
+    end
     vim.lsp.start({
       name = 'better-php-sense',
-      cmd = { 'php', '/Users/maikls/Projects/better-php-sense/bin/server.php' },
+      cmd = { 'php', server },
       -- vim.fs.root resolves from the buffer's absolute path; args.file can
       -- be cwd-relative, which used to leak relative roots like "backend".
       root_dir = vim.fs.root(args.buf, { 'composer.json', '.git' }),
     })
-  end,
-})
-
--- handy keymaps for PHP buffers
-vim.api.nvim_create_autocmd('LspAttach', {
-  callback = function(args)
-    local opts = { buffer = args.buf }
-    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts) -- code actions
-    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)      -- rename
-    -- format lives on the global <leader>fc (see util/format.lua)
   end,
 })

@@ -4,12 +4,27 @@
 -- almost always reload silently instead of throwing the W12 conflict prompt.
 vim.opt.autoread = true
 local reload_group = vim.api.nvim_create_augroup("auto_reload", { clear = true })
-vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI", "TermLeave" }, {
+local function can_checktime()
+	-- Don't checktime from the cmdline window or while typing a command.
+	return vim.fn.getcmdwintype() == "" and vim.fn.mode() ~= "c"
+end
+vim.api.nvim_create_autocmd({ "FocusGained", "CursorHold", "CursorHoldI", "TermLeave" }, {
 	group = reload_group,
 	callback = function()
-		-- Don't checktime from the cmdline window or while typing a command.
-		if vim.fn.getcmdwintype() == "" and vim.fn.mode() ~= "c" then
+		if can_checktime() then
 			vim.cmd("silent! checktime")
+		end
+	end,
+})
+-- Argument-less checktime stats every listed buffer, and BufEnter fires on
+-- every split/buffer hop — with a session's worth of buffers that adds up, so
+-- check only the entered buffer here and leave the full sweep to the rarer
+-- events above.
+vim.api.nvim_create_autocmd("BufEnter", {
+	group = reload_group,
+	callback = function(args)
+		if can_checktime() then
+			vim.cmd("silent! checktime " .. args.buf)
 		end
 	end,
 })

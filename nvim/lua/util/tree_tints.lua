@@ -81,8 +81,9 @@ local function pin_highlights()
     end
 end
 pin_highlights()
+local group = vim.api.nvim_create_augroup("tree_tints", { clear = true })
 vim.api.nvim_create_autocmd("ColorScheme", {
-    group = vim.api.nvim_create_augroup("tree_tints", { clear = true }),
+    group = group,
     callback = pin_highlights,
 })
 
@@ -123,6 +124,24 @@ local tints = {}
 -- CursorLine loses to any extmark range bg regardless of priority).
 local cursor_row = {}
 
+-- The on_win guard below only reaps a dead state when its buffer number
+-- gets reused; without these, entries for wiped tree buffers and closed
+-- windows accumulate for the whole session. Neo-tree deletes its buffer
+-- with nvim_buf_delete (renderer.lua close path), which fires BufWipeout.
+vim.api.nvim_create_autocmd("BufWipeout", {
+    group = group,
+    callback = function(ev)
+        states[ev.buf] = nil
+        tints[ev.buf] = nil
+    end,
+})
+vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    callback = function(ev)
+        cursor_row[tonumber(ev.match)] = nil
+    end,
+})
+
 -- after_render handler: remember (or refresh) the state for this buffer.
 -- after_render is fired via vim.schedule, one tick AFTER the buffer was
 -- written — the first frame may already be on screen untinted, and Neovim
@@ -152,12 +171,21 @@ vim.api.nvim_set_decoration_provider(ns, {
         local rows = tints[bufnr]
         if not rows or rows.tick ~= tick then
             rows = { tick = tick }
-            for lnum = 1, vim.api.nvim_buf_line_count(bufnr) do
-                local ok, node = pcall(state.tree.get_node, state.tree, lnum)
-                if ok and node and node.path then
-                    local kind = M.classify(node.path, state.path)
-                    if kind then
-                        rows[lnum] = tint_groups[kind]
+            -- nui's tree:get_node(lnum) resolves a window via
+            -- vim.fn.win_findbuf on every call even though numeric lookups
+            -- never use it — one Fn-bridge round trip per line. Index the
+            -- two tables it actually consults (nui rebuilds both on every
+            -- render) directly instead.
+            local by_linenr = state.tree._ and state.tree._.node_id_by_linenr
+            local by_id = state.tree.nodes and state.tree.nodes.by_id
+            if by_linenr and by_id then
+                for lnum = 1, vim.api.nvim_buf_line_count(bufnr) do
+                    local node = by_id[by_linenr[lnum]]
+                    if node and node.path then
+                        local kind = M.classify(node.path, state.path)
+                        if kind then
+                            rows[lnum] = tint_groups[kind]
+                        end
                     end
                 end
             end
