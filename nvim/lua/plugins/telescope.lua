@@ -42,6 +42,10 @@ return {
         -- only — see the Aa badge on the right of the prompt.
         { "<leader>ff", function() require("util.telescope_case").find_files() end, desc = "Find files" },
         { "<leader>fg", function() require("util.telescope_case").live_grep() end, desc = "Live grep (search in files)" },
+        -- Capital variants start with tests hidden; <C-t> in the prompt
+        -- flips the filter either way.
+        { "<leader>fF", function() require("util.telescope_case").find_files_no_tests() end, desc = "Find files (tests hidden)" },
+        { "<leader>fG", function() require("util.telescope_case").live_grep_no_tests() end, desc = "Live grep (tests hidden)" },
         { "<leader>fb", "<cmd>Telescope buffers<cr>", desc = "Open buffers" },
         { "<leader>fr", "<cmd>Telescope oldfiles<cr>", desc = "Recent files (all)" },
         { "<leader>fp", project_recent_files, desc = "Recent files (this project, max 12)" },

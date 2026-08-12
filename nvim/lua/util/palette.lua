@@ -217,6 +217,21 @@ M.categories = {
         items = {
             { desc = "Find files", keys = "<C-p> / <leader>ff", cmd = "Telescope find_files" },
             { desc = "Live grep", keys = "<leader>fg", cmd = "Telescope live_grep" },
+            {
+                desc = "Find files (tests hidden)",
+                keys = "<leader>fF",
+                action = function()
+                    require("util.telescope_case").find_files_no_tests()
+                end,
+            },
+            {
+                desc = "Live grep (tests hidden)",
+                keys = "<leader>fG",
+                action = function()
+                    require("util.telescope_case").live_grep_no_tests()
+                end,
+            },
+            { desc = "Toggle hide tests (in picker / references)", keys = "<C-t>" },
             { desc = "Open buffers", keys = "<leader>fb", cmd = "Telescope buffers" },
             { desc = "Recent files (all)", keys = "<leader>fr", cmd = "Telescope oldfiles" },
             { desc = "Recent files (this project)", keys = "<leader>fp" },

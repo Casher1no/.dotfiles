@@ -100,6 +100,33 @@ function M._gather(cb, opts)
     end)
 end
 
+local badge_ns = vim.api.nvim_create_namespace("references_tests_badge")
+
+-- Right-aligned badge in the prompt line showing the test-filter state,
+-- same style as the Aa badge in util/telescope_case.lua.
+local function place_badge(prompt_bufnr, hide_tests)
+    vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(prompt_bufnr) then
+            return
+        end
+        vim.api.nvim_buf_set_extmark(prompt_bufnr, badge_ns, 0, 0, {
+            virt_text = hide_tests and { { " tests ✗ ", "DiagnosticWarn" } }
+                or { { " tests ⟨C-t⟩ ", "Comment" } },
+            virt_text_pos = "right_align",
+        })
+    end)
+end
+
+-- References inside test folders / colocated test files, per the shared
+-- classification in util/tree_tints. Pinned definitions (·def) never count:
+-- hiding the definition itself would be worse than showing a test row.
+local function is_test_item(item)
+    if item.is_def then
+        return false
+    end
+    return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.loop.cwd()) == "test"
+end
+
 -- opts.prepend: items pinned to the top of the list (gd passes the
 --   definitions, so one picker shows definition + usages together). Their
 --   lines are filtered out of the reference half so nothing appears twice.
@@ -162,19 +189,43 @@ function M.open(opts)
             }
         end
 
-        pickers
-            .new({}, {
-                -- Never censor LSP results with the search-noise ignore
-                -- patterns: a reference inside vendor/node_modules is still
-                -- a reference (telescope filters picker entries through
-                -- file_ignore_patterns by default).
-                file_ignore_patterns = {},
-                prompt_title = opts.title or "References — current file first",
-                finder = finders.new_table({ results = items, entry_maker = entry_maker }),
-                sorter = conf.generic_sorter({}),
-                previewer = conf.qflist_previewer({}),
-            })
-            :find()
+        -- hide_tests drops usages in test folders/files (<C-t> toggles it,
+        -- like the filter buttons on JetBrains' Find Usages panel). The full
+        -- item list stays in this closure, so toggling just rebuilds the
+        -- picker from it with the typed query kept.
+        local function show(hide_tests, text)
+            local shown = items
+            if hide_tests then
+                shown = vim.tbl_filter(function(it)
+                    return not is_test_item(it)
+                end, items)
+            end
+            pickers
+                .new({}, {
+                    -- Never censor LSP results with the search-noise ignore
+                    -- patterns: a reference inside vendor/node_modules is still
+                    -- a reference (telescope filters picker entries through
+                    -- file_ignore_patterns by default).
+                    file_ignore_patterns = {},
+                    prompt_title = (opts.title or "References — current file first")
+                        .. (hide_tests and " — tests hidden" or ""),
+                    default_text = text,
+                    finder = finders.new_table({ results = shown, entry_maker = entry_maker }),
+                    sorter = conf.generic_sorter({}),
+                    previewer = conf.qflist_previewer({}),
+                    attach_mappings = function(prompt_bufnr, map)
+                        place_badge(prompt_bufnr, hide_tests)
+                        map({ "i", "n" }, "<C-t>", function()
+                            local line = require("telescope.actions.state").get_current_line()
+                            require("telescope.actions").close(prompt_bufnr)
+                            show(not hide_tests, line)
+                        end, { desc = "Toggle hide tests" })
+                        return true
+                    end,
+                })
+                :find()
+        end
+        show(false)
     end, { silent = #prepend > 0 })
 end
 
