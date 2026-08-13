@@ -246,6 +246,20 @@ M.categories = {
         icon = "",
         items = {
             {
+                desc = "Replace in project (all files)",
+                keys = "<leader>sR",
+                action = function()
+                    require("grug-far").open()
+                end,
+            },
+            {
+                desc = "Replace word under cursor (project)",
+                keys = "<leader>sw",
+                action = function()
+                    require("grug-far").open({ prefills = { search = vim.fn.expand("<cword>") } })
+                end,
+            },
+            {
                 desc = "Replace word under cursor (in file)",
                 keys = "<leader>sr",
                 action = function()
