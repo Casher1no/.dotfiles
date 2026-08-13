@@ -296,25 +296,24 @@ function M._entries(cb)
         return params
     end, function(results)
         local collected = {}
-        for client_id, res in pairs(results or {}) do
-            for _, action in ipairs(res.result or {}) do
-                local group = group_for(action.kind)
-                collected[#collected + 1] = {
-                    label = action.title,
-                    rank = group.rank,
-                    group_label = group.label,
-                    -- servers mark the fix they'd apply themselves; it leads
-                    preferred = action.isPreferred and 0 or 1,
-                    order = #collected,
-                    run = function()
-                        apply_action({
-                            action = action,
-                            client_id = client_id,
-                            request_params = params_by_client[client_id],
-                        }, bufnr)
-                    end,
-                }
-            end
+        for _, item in ipairs(M._dedupe(results)) do
+            local action, client_id = item.action, item.client_id
+            local group = group_for(action.kind)
+            collected[#collected + 1] = {
+                label = action.title,
+                rank = group.rank,
+                group_label = group.label,
+                -- servers mark the fix they'd apply themselves; it leads
+                preferred = action.isPreferred and 0 or 1,
+                order = #collected,
+                run = function()
+                    apply_action({
+                        action = action,
+                        client_id = client_id,
+                        request_params = params_by_client[client_id],
+                    }, bufnr)
+                end,
+            }
         end
         table.sort(collected, function(a, b)
             if a.rank ~= b.rank then
@@ -348,8 +347,30 @@ function M._entries(cb)
     end)
 end
 
+-- One row per title: jdtls sends its generators twice — a kindless quick
+-- assist and a source.generate.* action with the same title. The kinded
+-- copy wins, it is the one that knows which group it belongs to.
+-- results: client_id -> { result = CodeAction[] }, as buf_request_all
+-- hands them over; returns { { action, client_id } } in arrival order.
+local function dedupe_results(results)
+    local picked, by_title = {}, {}
+    for client_id, res in pairs(results or {}) do
+        for _, action in ipairs(res.result or {}) do
+            local prev = by_title[action.title]
+            if not prev then
+                picked[#picked + 1] = { action = action, client_id = client_id }
+                by_title[action.title] = picked[#picked]
+            elseif (prev.action.kind or "") == "" and (action.kind or "") ~= "" then
+                prev.action, prev.client_id = action, client_id
+            end
+        end
+    end
+    return picked
+end
+
 -- Exposed for headless tests.
 M._show_menu = show_menu
+M._dedupe = dedupe_results
 
 function M.open()
     M._entries(function(entries)
