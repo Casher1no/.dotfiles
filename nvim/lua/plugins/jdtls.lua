@@ -45,6 +45,24 @@ return {
             ".git",
         }
 
+        -- An upgrade-stable JDK home for Gradle imports. Left to itself,
+        -- buildship resolves the default VM to its *versioned* install path
+        -- (…/Cellar/openjdk@21/21.0.9/…) and persists it into the project's
+        -- .settings/org.eclipse.buildship.core.prefs — the next brew upgrade
+        -- deletes that directory and every import fails with "Supplied
+        -- javaHome is not a valid folder", leaving jdtls stuck at 0%. The
+        -- /opt/homebrew/opt symlink tracks the current version instead.
+        local function stable_java_home()
+            for _, home in ipairs({
+                "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home", -- brew (mac)
+                vim.env.JAVA_HOME, -- explicit choice on linux/windows
+            }) do
+                if home and (vim.uv or vim.loop).fs_stat(home .. "/bin") then
+                    return home
+                end
+            end
+        end
+
         local function start()
             local root = vim.fs.root(0, root_markers) or vim.fn.getcwd()
             require("jdtls").start_or_attach({
@@ -56,6 +74,11 @@ return {
                 },
                 root_dir = root,
                 init_options = { bundles = bundles() },
+                settings = {
+                    java = {
+                        import = { gradle = { java = { home = stable_java_home() } } },
+                    },
+                },
                 on_attach = function()
                     -- Register the `java` dap adapter and auto-build launch
                     -- configs for the project's main classes.

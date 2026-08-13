@@ -114,8 +114,12 @@ return {
                 vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, opts)
                 vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, opts)
 
-                -- Code actions and refactoring
-                vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
+                -- Code actions and refactoring: JetBrains-style intentions
+                -- dropdown at the cursor (LSP actions + treesj split/join),
+                -- see util/actions.lua.
+                vim.keymap.set({ "n", "v" }, "<leader>ca", function()
+                    require("util.actions").open()
+                end, opts)
                 vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
                 vim.keymap.set("n", "<F2>", vim.lsp.buf.rename, opts)
 
