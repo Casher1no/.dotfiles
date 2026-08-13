@@ -12,12 +12,18 @@
 --              a warning, not an error, and `sync` skips auto-installing it
 --              unless its installer is mason (mason packages are cheap and
 --              expected by ensure_installed anyway)
---   check      { bin = "exe" } executable lookup, or { fn = function() ... }
---              returning status ("ok"|"missing"|"warn"|"manual"), detail
+--   check      { bin = "exe" | { "exe1", "exe2" } } executable lookup (any
+--              name matching counts), or { fn = function() ... } returning
+--              status ("ok"|"missing"|"warn"|"manual"), detail
 --   version    { cmd = {...}, min = "x.y.z" } — async `cmd`, first x.y[.z]
 --              in its output is the version; below min = "outdated"
---   install    { brew = "formula" } | { cask = "name" } | { mason = "pkg" }
---              | { cmd = {...} } — absent means Doctor can only report it
+--   install    per-OS package names, resolved by the engine against the
+--              detected manager: brew/cask (mac), choco (windows),
+--              apt (+ optional dnf/pacman overrides when names differ,
+--              apt name is the linux fallback), plus the OS-agnostic
+--              { cmd = {...} } | { mason = "pkg" } | { restore_plugins } |
+--              { treesitter }. Absent key for the running OS = Doctor can
+--              only report it there.
 local M = {}
 
 -- Root of the dotfiles nvim config (this file lives at
@@ -34,7 +40,10 @@ M.treesitter_parsers = {
 }
 
 local uv = vim.uv or vim.loop
-local is_mac = uv.os_uname().sysname == "Darwin"
+
+-- "mac" | "windows" | "linux" — the axis every per-OS decision hangs on.
+local sysname = uv.os_uname().sysname
+M.os = sysname == "Darwin" and "mac" or (sysname:find("Windows") and "windows" or "linux")
 
 -- status helper for { fn = ... } checks
 local function found(path)
@@ -46,50 +55,58 @@ M.entries = {
     {
         id = "git", name = "git", group = "Core tools",
         needed_for = "lazy.nvim bootstrap/updates, gitsigns, telescope git status",
-        check = { bin = "git" }, install = { brew = "git" },
+        check = { bin = "git" },
+        install = { brew = "git", choco = "git", apt = "git" },
     },
     {
         id = "rg", name = "ripgrep", group = "Core tools",
         needed_for = "live grep, word search, PHP reference fallback, LSP heal",
         check = { bin = "rg" },
         version = { cmd = { "rg", "--version" } },
-        install = { brew = "ripgrep" },
+        install = { brew = "ripgrep", choco = "ripgrep", apt = "ripgrep" },
     },
     {
         id = "fd", name = "fd", group = "Core tools", optional = true,
         needed_for = "faster find_files (telescope falls back to find without it)",
-        check = { bin = "fd" }, install = { brew = "fd" },
+        check = { bin = "fd" },
+        install = { brew = "fd", choco = "fd", apt = "fd-find", pacman = "fd", dnf = "fd-find" },
     },
     {
         id = "node", name = "Node.js", group = "Core tools",
         needed_for = "7 LSP servers run on node (vtsls, intelephense, tailwind, …)",
         check = { bin = "node" },
         version = { cmd = { "node", "--version" }, min = "18.0.0" },
-        install = { brew = "node" },
+        install = { brew = "node", choco = "nodejs-lts", apt = "nodejs" },
     },
     {
         id = "npm", name = "npm", group = "Core tools",
         needed_for = "mason installs the npm-based servers with it",
-        check = { bin = "npm" }, install = { brew = "node" },
+        check = { bin = "npm" },
+        install = { brew = "node", choco = "nodejs-lts", apt = "npm" },
     },
     {
-        id = "cc", name = "C compiler (clang)", group = "Core tools",
+        id = "cc", name = "C compiler", group = "Core tools",
         needed_for = "compiling the 25 treesitter parsers",
-        check = { bin = "cc" },
-        -- clang ships with the Xcode Command Line Tools, not brew
-        install = is_mac and { cmd = { "xcode-select", "--install" } } or nil,
+        check = { bin = { "cc", "gcc", "clang" } },
+        -- mac: clang ships with the Xcode CLT, not brew; windows: mingw's gcc
+        install = M.os == "mac" and { cmd = { "xcode-select", "--install" } }
+            or { choco = "mingw", apt = "build-essential", dnf = "gcc", pacman = "base-devel" },
     },
     {
         id = "curl", name = "curl", group = "Core tools",
         needed_for = "mason package downloads",
-        check = { bin = "curl" }, install = { brew = "curl" },
+        check = { bin = "curl" },
+        install = { brew = "curl", choco = "curl", apt = "curl" },
     },
     {
-        id = "unzip", name = "unzip + tar + gzip", group = "Core tools",
+        id = "unzip", name = "archive tools", group = "Core tools",
         needed_for = "unpacking mason release artifacts (roslyn, jdtls, …)",
         check = {
             fn = function()
-                for _, bin in ipairs({ "unzip", "tar", "gzip" }) do
+                -- windows: tar ships since Win10 and mason unzips with
+                -- PowerShell, so only tar is worth probing there
+                local bins = M.os == "windows" and { "tar" } or { "unzip", "tar", "gzip" }
+                for _, bin in ipairs(bins) do
                     if vim.fn.executable(bin) ~= 1 then
                         return "missing", bin .. " not on PATH"
                     end
@@ -97,6 +114,7 @@ M.entries = {
                 return "ok"
             end,
         },
+        install = { apt = "unzip" },
     },
     {
         id = "claude", name = "Claude Code CLI", group = "Core tools", optional = true,
@@ -111,29 +129,35 @@ M.entries = {
         needed_for = "Laravel/PHP projects: artisan, Xdebug target, better-php-sense",
         check = { bin = "php" },
         version = { cmd = { "php", "--version" } },
-        install = { brew = "php" },
+        install = { brew = "php", choco = "php", apt = "php-cli", pacman = "php" },
     },
     {
         id = "python3", name = "Python 3", group = "Language runtimes", optional = true,
         needed_for = "Python projects; debugpy's venv",
-        check = { bin = "python3" },
-        version = { cmd = { "python3", "--version" } },
-        install = { brew = "python" },
+        check = { bin = { "python3", "python" } },
+        version = { cmd = M.os == "windows" and { "python", "--version" } or { "python3", "--version" } },
+        install = { brew = "python", choco = "python", apt = "python3" },
     },
     {
         id = "java", name = "JDK", group = "Language runtimes", optional = true,
         needed_for = "Java projects: jdtls runs on it (17+, current builds want 21)",
         check = { bin = "java" },
         version = { cmd = { "java", "-version" }, min = "17.0.0" },
-        -- keg-only: needs PATH="$(brew --prefix openjdk@21)/bin:$PATH" afterwards
-        install = { brew = "openjdk@21" },
+        -- brew's openjdk@21 is keg-only: needs PATH="$(brew --prefix openjdk@21)/bin:$PATH"
+        install = {
+            brew = "openjdk@21",
+            choco = "temurin21",
+            apt = "openjdk-21-jdk",
+            dnf = "java-21-openjdk",
+            pacman = "jdk21-openjdk",
+        },
     },
     {
         id = "dotnet", name = ".NET SDK", group = "Language runtimes", optional = true,
         needed_for = "C#/Unity: roslyn LS, netcoredbg, the vstuc debug adapter host",
         check = { bin = "dotnet" },
         version = { cmd = { "dotnet", "--version" } },
-        install = { cask = "dotnet-sdk" },
+        install = { cask = "dotnet-sdk", choco = "dotnet-sdk", apt = "dotnet-sdk-8.0", pacman = "dotnet-sdk" },
     },
 
     -- ── Editor layer ───────────────────────────────────────────────────
@@ -148,7 +172,7 @@ M.entries = {
                     ("running %d.%d.%d"):format(v.major, v.minor, v.patch)
             end,
         },
-        install = { brew = "neovim" },
+        install = { brew = "neovim", choco = "neovim", apt = "neovim" },
     },
     {
         id = "plugins", name = "Plugins (lazy-lock.json)", group = "Editor",
@@ -195,7 +219,7 @@ M.entries = {
 
     -- ── Environment ────────────────────────────────────────────────────
     {
-        id = "symlink", name = "~/.config/nvim → dotfiles", group = "Environment",
+        id = "symlink", name = "nvim config → dotfiles", group = "Environment",
         needed_for = "nvim picking this config up at all",
         check = {
             fn = function()
@@ -227,7 +251,11 @@ M.entries = {
         needed_for = "clipboard=unnamedplus (yank ↔ system clipboard)",
         check = {
             fn = function()
-                local bins = is_mac and { "pbcopy" } or { "wl-copy", "xclip", "xsel" }
+                if M.os == "windows" then
+                    -- nvim's provider falls back to the built-in win32 API
+                    return "ok", vim.fn.executable("win32yank") == 1 and "win32yank" or "built-in"
+                end
+                local bins = M.os == "mac" and { "pbcopy" } or { "wl-copy", "xclip", "xsel" }
                 for _, bin in ipairs(bins) do
                     if vim.fn.executable(bin) == 1 then
                         return "ok", bin
@@ -236,7 +264,7 @@ M.entries = {
                 return "missing", "no clipboard tool (" .. table.concat(bins, "/") .. ")"
             end,
         },
-        install = not is_mac and { cmd = { "sh", "-c", "sudo apt-get install -y wl-clipboard || sudo apt-get install -y xclip" } } or nil,
+        install = M.os == "linux" and { apt = "wl-clipboard", dnf = "wl-clipboard", pacman = "wl-clipboard" } or nil,
     },
     {
         id = "nerdfont", name = "Nerd Font   󰋠", group = "Environment",
@@ -247,7 +275,7 @@ M.entries = {
         check = { fn = function()
             return "manual", "if the icons on this row are boxes, set a Nerd Font in the terminal"
         end },
-        install = { cask = "font-jetbrains-mono-nerd-font" },
+        install = { cask = "font-jetbrains-mono-nerd-font", choco = "nerd-fonts-jetbrainsmono" },
     },
     {
         id = "better-php-sense", name = "better-php-sense", group = "Environment", optional = true,
@@ -274,7 +302,7 @@ M.entries = {
 
 -- Mason-managed servers, formatters and debug adapters. Package names are
 -- mason registry names (mason-lspconfig's ensure_installed uses lspconfig
--- aliases; these are what actually lands in ~/.local/share/nvim/mason).
+-- aliases; these are what actually lands in the mason data dir).
 local mason = {
     { pkg = "lua-language-server", needed_for = "editing this config" },
     { pkg = "stylua", needed_for = "formatting this config (util/format.lua)" },

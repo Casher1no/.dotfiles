@@ -20,6 +20,8 @@ M.state = {
     probed_at = 0,
     pending = 0, -- async probes in flight
     busy = nil, -- label of a running install/update batch
+    checking_updates = false,
+    note = nil, -- persistent one-line outcome shown in the panel ("no updates found", …)
     log = {},
 }
 
@@ -35,7 +37,71 @@ local HL = {
 }
 
 local function log(line)
-    table.insert(M.state.log, os.date("%H:%M:%S") .. "  " .. line)
+    -- one table entry per screen line: stderr from failed commands is
+    -- multi-line, and nvim_buf_set_lines (open_log) rejects embedded \n
+    local stamp = os.date("%H:%M:%S") .. "  "
+    local first = true
+    for piece in tostring(line):gmatch("[^\r\n]+") do
+        table.insert(M.state.log, (first and stamp or "          ") .. piece)
+        first = false
+    end
+end
+
+-- The panel's persistent status line: vim.notify alone is easy to miss (it
+-- fades, and the palette holds focus), so every action also leaves its
+-- outcome here until the next action replaces it.
+local function set_note(msg)
+    M.state.note = msg
+    if msg then
+        log(msg)
+    end
+end
+
+-- One system package manager per OS: brew (mac), choco (windows),
+-- apt-get/dnf/pacman (linux, first found). false = detection ran, none found.
+local pm_cache
+local function package_manager()
+    if pm_cache == nil then
+        pm_cache = false
+        local candidates = ({
+            mac = { "brew" },
+            windows = { "choco" },
+            linux = { "apt-get", "dnf", "pacman" },
+        })[registry.os]
+        for _, bin in ipairs(candidates) do
+            if vim.fn.executable(bin) == 1 then
+                pm_cache = bin
+                break
+            end
+        end
+    end
+    return pm_cache or nil
+end
+
+-- Resolve an entry's package name for the detected manager.
+-- Returns manager, name, is_cask (brew only).
+local function pkg_for(entry)
+    local ins = entry.install
+    local pm = package_manager()
+    if not (ins and pm) then
+        return nil
+    end
+    if pm == "brew" then
+        if ins.brew then
+            return pm, ins.brew, false
+        elseif ins.cask then
+            return pm, ins.cask, true
+        end
+    elseif pm == "choco" then
+        if ins.choco then
+            return pm, ins.choco, false
+        end
+    else -- linux managers fall back to the apt name unless overridden
+        local name = (pm == "dnf" and (ins.dnf or ins.apt)) or (pm == "pacman" and (ins.pacman or ins.apt)) or ins.apt
+        if name then
+            return pm, name, false
+        end
+    end
 end
 
 -- Repaint the palette's Doctor rows if it is open. package.loaded (not
@@ -92,7 +158,16 @@ local function probe_entry(entry, done)
         return done()
     end
     if check.bin then
-        if vim.fn.executable(check.bin) ~= 1 then
+        -- a list means "any of these counts" (python3 vs python on windows)
+        local bins = type(check.bin) == "table" and check.bin or { check.bin }
+        local have
+        for _, bin in ipairs(bins) do
+            if vim.fn.executable(bin) == 1 then
+                have = bin
+                break
+            end
+        end
+        if not have then
             set_result(entry, "missing")
             return done()
         end
@@ -161,21 +236,57 @@ end
 
 -- ── update detection ───────────────────────────────────────────────────
 
--- One `brew outdated` call marks every brew/cask entry; mason packages are
--- asked individually (that is a network hit per package, so only on demand).
+-- One package-manager query marks every system entry (`brew outdated` on
+-- mac, `choco outdated` on windows; apt/dnf have no cheap per-package query,
+-- so linux system updates are left to the distro and only logged); mason
+-- packages are asked individually (a network hit per package, so on demand).
 -- cb (optional) fires once, when every started check has resolved or after
 -- a 60s safety timeout — `:Doctor update` chains the apply step off it.
 function M.check_updates(cb)
+    if M.state.checking_updates then
+        return
+    end
+    M.state.checking_updates = true
     local pending = 0
     local fired = false
-    local function finish_one()
-        pending = pending - 1
-        if pending == 0 and cb and not fired then
-            fired = true
+    local function finish_all()
+        if fired then
+            return
+        end
+        fired = true
+        M.state.checking_updates = false
+        local n = 0
+        for _, res in pairs(M.state.results) do
+            if res.latest then
+                n = n + 1
+            end
+        end
+        set_note(n == 0 and "no updates found" or n .. " update(s) available — ↑ rows, or “Update all outdated”")
+        notify_change()
+        if cb then
             cb()
         end
     end
-    if vim.fn.executable("brew") == 1 then
+    local function finish_one()
+        pending = pending - 1
+        if pending == 0 then
+            finish_all()
+        end
+    end
+    -- system-manager sweep: name -> newest version
+    local function apply_latest(latest, key)
+        for _, entry in ipairs(registry.entries) do
+            local ins = entry.install
+            local name = ins and (key == "brew" and (ins.brew or ins.cask) or ins[key])
+            local res = M.state.results[entry.id]
+            if name and res then
+                res.latest = latest[name]
+            end
+        end
+        notify_change()
+    end
+    local pm = package_manager()
+    if pm == "brew" then
         pending = pending + 1
         vim.system({ "brew", "outdated", "--json=v2" }, { text = true, timeout = 60000 }, function(out)
             vim.schedule(function()
@@ -188,18 +299,29 @@ function M.check_updates(cb)
                     for _, c in ipairs(data.casks or {}) do
                         latest[c.name] = (c.current_version or "new version")
                     end
-                    for _, entry in ipairs(registry.entries) do
-                        local formula = entry.install and (entry.install.brew or entry.install.cask)
-                        local res = M.state.results[entry.id]
-                        if formula and res then
-                            res.latest = latest[formula]
-                        end
-                    end
-                    notify_change()
+                    apply_latest(latest, "brew")
                 end
                 finish_one()
             end)
         end)
+    elseif pm == "choco" then
+        pending = pending + 1
+        -- -r: machine-readable "name|current|available|pinned" lines
+        vim.system({ "choco", "outdated", "-r" }, { text = true, timeout = 60000 }, function(out)
+            vim.schedule(function()
+                local latest = {}
+                for line in (out.stdout or ""):gmatch("[^\r\n]+") do
+                    local name, _, available = line:match("^([^|]+)|([^|]*)|([^|]*)|")
+                    if name and available and available ~= "" then
+                        latest[name] = available
+                    end
+                end
+                apply_latest(latest, "choco")
+                finish_one()
+            end)
+        end)
+    elseif pm then
+        log("system updates on linux are the distro's job — check e.g. `apt list --upgradable`")
     end
     local ok, mr = pcall(require, "mason-registry")
     if ok then
@@ -232,21 +354,14 @@ function M.check_updates(cb)
             end
         end
     end
-    log("update check started (brew outdated + mason registry)")
+    set_note("checking for updates…")
+    log("update check started (" .. (package_manager() or "no system manager") .. " + mason registry)")
     notify_change()
-    if cb then
-        if pending == 0 then
-            fired = true
-            cb()
-        else
-            -- safety net for callbacks mason never delivers
-            vim.defer_fn(function()
-                if not fired then
-                    fired = true
-                    cb()
-                end
-            end, 60000)
-        end
+    if pending == 0 then
+        finish_all()
+    else
+        -- safety net for callbacks mason never delivers
+        vim.defer_fn(finish_all, 60000)
     end
 end
 
@@ -302,9 +417,9 @@ local function shell_job(desc, cmd)
     }
 end
 
-local function mason_job(names)
+local function mason_job(names, want_update)
     return {
-        desc = "mason install: " .. table.concat(names, ", "),
+        desc = (want_update and "mason update: " or "mason install: ") .. table.concat(names, ", "),
         run = function(next_job)
             local ok, mr = pcall(require, "mason-registry")
             if not ok then
@@ -312,13 +427,27 @@ local function mason_job(names)
                 return next_job()
             end
             local function start()
+                -- pkg:install() always fetches the latest version, so it is
+                -- also the upgrade path — on updates the "already installed"
+                -- skip must not apply, and completion is the install handle
+                -- closing (is_installed is already true throughout).
+                local handles = {}
                 for _, name in ipairs(names) do
                     local okp, pkg = pcall(mr.get_package, name)
-                    if okp and not pkg:is_installed() then
-                        pcall(pkg.install, pkg)
+                    if okp and (want_update or not pkg:is_installed()) then
+                        local okh, handle = pcall(pkg.install, pkg)
+                        if okh and handle then
+                            handles[#handles + 1] = handle
+                        end
                     end
                 end
                 poll(function()
+                    for _, handle in ipairs(handles) do
+                        local okc, closed = pcall(handle.is_closed, handle)
+                        if okc and not closed then
+                            return false
+                        end
+                    end
                     for _, name in ipairs(names) do
                         if not mr.is_installed(name) then
                             return false
@@ -326,7 +455,8 @@ local function mason_job(names)
                     end
                     return true
                 end, 600000, function(all_done)
-                    log(all_done and "mason packages installed" or "mason: timed out / some installs failed (see :Mason)")
+                    log(all_done and ("mason packages " .. (want_update and "updated" or "installed"))
+                        or "mason: timed out / some installs failed (see :Mason)")
                     next_job()
                 end)
             end
@@ -399,22 +529,80 @@ end
 -- multi-GB SDKs like the JDK or dotnet onto a machine that may never edit
 -- those stacks). include_optional=true is the per-row install, where the
 -- user explicitly asked for that one dependency.
+-- Runs cmd in a visible terminal split: choco wants an elevated shell and
+-- apt/dnf/pacman go through sudo — both need a tty for prompts, and the
+-- output doubles as the progress indicator. Headless falls back to a plain
+-- spawn and lets failures land in the log.
+local function terminal_job(desc, cmd)
+    return {
+        desc = desc,
+        run = function(next_job)
+            if #vim.api.nvim_list_uis() == 0 then
+                return shell_job(desc, cmd).run(next_job)
+            end
+            vim.cmd("botright 12new")
+            local win = vim.api.nvim_get_current_win()
+            local ok = pcall(vim.fn.jobstart, cmd, {
+                term = true,
+                on_exit = vim.schedule_wrap(function(_, code)
+                    if code == 0 then
+                        log("done: " .. desc)
+                        -- keep failed runs on screen for inspection
+                        if vim.api.nvim_win_is_valid(win) then
+                            pcall(vim.api.nvim_win_close, win, true)
+                        end
+                    else
+                        log("FAILED (" .. code .. "): " .. desc .. " — output left open in the split")
+                    end
+                    next_job()
+                end),
+            })
+            if not ok then
+                pcall(vim.api.nvim_win_close, win, true)
+                log("FAILED to spawn: " .. desc)
+                next_job()
+            end
+        end,
+    }
+end
+
+-- One job per system package manager, from a list of package names.
+local function system_job(pm, names, want_update)
+    local label = pm .. (want_update and " upgrade: " or " install: ") .. table.concat(names, ", ")
+    if pm == "brew" then
+        local verb = want_update and "upgrade" or "install"
+        return shell_job(label, vim.list_extend({ "brew", verb }, names))
+    elseif pm == "choco" then
+        local verb = want_update and "upgrade" or "install"
+        -- needs an admin shell; the terminal split shows choco's own error
+        -- if nvim wasn't started elevated
+        return terminal_job(label, vim.list_extend({ "choco", verb, "-y" }, names))
+    elseif pm == "apt-get" then
+        return terminal_job(label, vim.list_extend({ "sudo", "apt-get", "install", "-y" }, names))
+    elseif pm == "dnf" then
+        return terminal_job(label, vim.list_extend({ "sudo", "dnf", "install", "-y" }, names))
+    elseif pm == "pacman" then
+        return terminal_job(label, vim.list_extend({ "sudo", "pacman", "-S", "--noconfirm", "--needed" }, names))
+    end
+end
+
 local function build_install_jobs(want_update, include_optional)
-    local brew, cask, jobs, mason_pkgs, ts_missing = {}, {}, {}, {}, nil
+    local sys, sys_cask, jobs, mason_pkgs, ts_missing, unmanaged = {}, {}, {}, {}, nil, {}
     for _, entry in ipairs(registry.entries) do
         local res = M.state.results[entry.id] or {}
         local wanted = want_update and (res.latest ~= nil)
             or (not want_update and (res.status == "missing" or res.status == "outdated"))
-        if wanted and entry.optional and not include_optional and not (entry.install and entry.install.mason) then
+        -- The optional-skip contract covers INSTALLS only: pulling a multi-GB
+        -- SDK nobody asked for is the thing to avoid. An update mark proves
+        -- the tool is already installed, so upgrades always qualify.
+        if wanted and not want_update and entry.optional and not include_optional
+            and not (entry.install and entry.install.mason)
+        then
             wanted = false
         end
         if wanted and entry.install then
             local ins = entry.install
-            if ins.brew then
-                brew[#brew + 1] = ins.brew
-            elseif ins.cask then
-                cask[#cask + 1] = ins.cask
-            elseif ins.mason then
+            if ins.mason then
                 mason_pkgs[#mason_pkgs + 1] = ins.mason
             elseif ins.cmd and not want_update then
                 jobs[#jobs + 1] = shell_job(table.concat(ins.cmd, " "), ins.cmd)
@@ -422,26 +610,44 @@ local function build_install_jobs(want_update, include_optional)
                 jobs[#jobs + 1] = restore_job()
             elseif ins.treesitter and not want_update then
                 ts_missing = true
+            else
+                local pm, name, is_cask = pkg_for(entry)
+                if pm then
+                    local bucket = is_cask and sys_cask or sys
+                    bucket[#bucket + 1] = name
+                else
+                    unmanaged[#unmanaged + 1] = entry.name
+                end
             end
         end
     end
+    if #unmanaged > 0 then
+        if not package_manager() then
+            local hint = ({
+                mac = "install Homebrew first",
+                windows = "install Chocolatey first (https://chocolatey.org/install)",
+                linux = "no apt-get/dnf/pacman found",
+            })[registry.os]
+            set_note("can't install " .. table.concat(unmanaged, ", ") .. " — " .. hint)
+        else
+            log("no " .. package_manager() .. " package known for: " .. table.concat(unmanaged, ", ") .. " — install manually")
+        end
+    end
     local out = {}
-    if vim.fn.executable("brew") == 1 then
+    local pm = package_manager()
+    if pm and #sys > 0 then
+        out[#out + 1] = system_job(pm, sys, want_update)
+    end
+    if pm == "brew" and #sys_cask > 0 then
         local verb = want_update and "upgrade" or "install"
-        if #brew > 0 then
-            out[#out + 1] = shell_job("brew " .. verb .. ": " .. table.concat(brew, ", "),
-                vim.list_extend({ "brew", verb }, brew))
-        end
-        if #cask > 0 then
-            out[#out + 1] = shell_job("brew " .. verb .. " --cask: " .. table.concat(cask, ", "),
-                vim.list_extend({ "brew", verb, "--cask" }, cask))
-        end
-    elseif #brew + #cask > 0 then
-        log("brew not found — run bootstrap.sh (or install Homebrew) for: "
-            .. table.concat(vim.list_extend(brew, cask), ", "))
+        -- terminal, not vim.system: casks wrapping .pkg installers (dotnet-sdk,
+        -- fonts to /Library) sudo-prompt mid-install, which a tty-less spawn
+        -- can only fail
+        out[#out + 1] = terminal_job("brew " .. verb .. " --cask: " .. table.concat(sys_cask, ", "),
+            vim.list_extend({ "brew", verb, "--cask" }, sys_cask))
     end
     if #mason_pkgs > 0 then
-        out[#out + 1] = mason_job(mason_pkgs)
+        out[#out + 1] = mason_job(mason_pkgs, want_update)
     end
     if ts_missing then
         -- recompute the actual missing set at run time
@@ -460,8 +666,10 @@ local function build_install_jobs(want_update, include_optional)
 end
 
 -- cb receives did_run: false on the busy/nothing-to-do early exits, so
--- callers don't treat a skipped batch as a completed one.
-local function run_batch(label, jobs, cb)
+-- callers don't treat a skipped batch as a completed one. empty_note is the
+-- persistent panel message for the nothing-to-do case (each caller knows
+-- what "nothing" means for it).
+local function run_batch(label, jobs, cb, empty_note)
     if M.state.busy then
         vim.notify("Doctor is already busy: " .. M.state.busy, vim.log.levels.WARN)
         if cb then
@@ -470,17 +678,27 @@ local function run_batch(label, jobs, cb)
         return
     end
     if #jobs == 0 then
-        vim.notify("Doctor: nothing to do", vim.log.levels.INFO)
+        set_note(empty_note or "nothing to do")
+        notify_change()
         if cb then
             cb(false)
         end
         return
     end
     M.state.busy = label
+    set_note(label .. " running… (" .. #jobs .. " steps — see log)")
     log("── " .. label .. " (" .. #jobs .. " steps)")
+    local log_start = #M.state.log
     notify_change()
     run_queue(jobs, function()
         M.state.busy = nil
+        local failed = 0
+        for i = log_start + 1, #M.state.log do
+            if M.state.log[i]:find("FAILED", 1, true) then
+                failed = failed + 1
+            end
+        end
+        set_note(label .. " finished" .. (failed > 0 and " — " .. failed .. " FAILED line(s) in the log" or " ✓"))
         log("── " .. label .. " finished")
         vim.notify("Doctor: " .. label .. " finished", vim.log.levels.INFO)
         -- a palette repaint mid-batch may have kicked off a probe pass whose
@@ -497,8 +715,12 @@ local function run_batch(label, jobs, cb)
     end)
 end
 
+-- Exposed for headless tests (same pattern as references._gather etc.).
+M._build_install_jobs = build_install_jobs
+
 function M.install_missing(cb)
-    run_batch("install missing", build_install_jobs(false), cb)
+    run_batch("install missing", build_install_jobs(false), cb,
+        "nothing required is missing — ⏎ on an optional ✗ row installs just that one")
 end
 
 function M.update_all(cb)
@@ -515,7 +737,7 @@ function M.update_all(cb)
         if cb then
             cb(did_run)
         end
-    end)
+    end, "nothing marked outdated — run “Check for updates” first")
 end
 
 -- Install a single registry entry (the per-row <CR> action — an explicit
@@ -606,9 +828,23 @@ function M.palette_items()
                 hl = "DiagnosticWarn"
             end
         end
-        local installer = entry.install
-            and (entry.install.brew and "brew" or entry.install.cask and "cask" or entry.install.mason and "mason"
-                or entry.install.treesitter and "TS" or entry.install.restore_plugins and "lazy" or "cmd")
+        local installer
+        if entry.install then
+            local ins = entry.install
+            if ins.mason then
+                installer = "mason"
+            elseif ins.treesitter then
+                installer = "TS"
+            elseif ins.restore_plugins then
+                installer = "lazy"
+            elseif ins.cmd then
+                installer = "cmd"
+            else
+                -- show the manager that would actually run on this OS
+                local pm = pkg_for(entry)
+                installer = pm or "manual"
+            end
+        end
         items[#items + 1] = {
             desc = desc,
             keys = installer or "",
@@ -633,6 +869,15 @@ function M.palette_items()
     end
 
     items[#items + 1] = { desc = "Actions", section = true }
+    -- Last action's outcome, kept until the next action replaces it. It sits
+    -- HERE, next to the buttons: the list is longer than the pane, so when
+    -- the selection is down at the actions the top rows are scrolled away —
+    -- and the floating notify fades while the palette holds focus.
+    if M.state.checking_updates then
+        items[#items + 1] = { desc = "⟳ checking for updates…", section = true, hl = "DiagnosticInfo" }
+    elseif M.state.note then
+        items[#items + 1] = { desc = "› " .. M.state.note, section = true, hl = "Comment" }
+    end
     items[#items + 1] = {
         desc = "Install all missing", keys = "⏎", keep_open = true,
         action = function() M.install_missing() end,
@@ -658,7 +903,15 @@ end
 
 function M.open_log()
     local buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, #M.state.log > 0 and M.state.log or { "(log is empty)" })
+    -- flatten defensively: entries logged before the newline-splitting in
+    -- log() existed (or by future callers bypassing it) must not crash here
+    local lines = {}
+    for _, entry in ipairs(M.state.log) do
+        for piece in entry:gmatch("[^\r\n]+") do
+            lines[#lines + 1] = piece
+        end
+    end
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, #lines > 0 and lines or { "(log is empty)" })
     vim.bo[buf].modifiable = false
     vim.bo[buf].bufhidden = "wipe"
     vim.cmd("botright split")

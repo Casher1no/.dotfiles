@@ -37,6 +37,14 @@ Linux)
         # fd is fd-find on debian/ubuntu; neovim from apt may be old — Doctor flags < 0.12
         sudo apt-get install -y neovim git ripgrep fd-find nodejs npm build-essential curl unzip ||
             warn "apt reported errors — Doctor will show what's still missing"
+    elif command -v dnf >/dev/null 2>&1; then
+        say "dnf install core tools (needs sudo)"
+        sudo dnf install -y neovim git ripgrep fd-find nodejs npm gcc curl unzip ||
+            warn "dnf reported errors — Doctor will show what's still missing"
+    elif command -v pacman >/dev/null 2>&1; then
+        say "pacman install core tools (needs sudo)"
+        sudo pacman -S --noconfirm --needed neovim git ripgrep fd nodejs npm base-devel curl unzip ||
+            warn "pacman reported errors — Doctor will show what's still missing"
     else
         warn "no supported package manager found — install manually: ${CORE_TOOLS[*]}"
     fi

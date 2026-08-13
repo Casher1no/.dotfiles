@@ -31,11 +31,19 @@ and can check, install and update them:
 Optional per-language stacks (PHP, Python, JDK 21, .NET SDK) show as
 warnings, not errors, until you install them.
 
-## Windows setup
+## Setup (Windows)
 
-- Install tools: `winget install Neovim.Neovim Git.Git BurntSushi.ripgrep.MSVC OpenJS.NodeJS`
-- Clone this repo: `git clone <repo-url> $HOME\.dotfiles`
-- Symlink the config (run PowerShell as Administrator):
-  `New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\nvim" -Target "$HOME\.dotfiles\nvim"`
-- Run `nvim --headless "+Doctor sync"`, or just launch `nvim` and open the
-  Doctor panel.
+In an **elevated** PowerShell:
+
+```powershell
+git clone <repo-url> $HOME\Projects\.dotfiles
+Set-ExecutionPolicy Bypass -Scope Process -Force
+& $HOME\Projects\.dotfiles\bootstrap.ps1
+```
+
+`bootstrap.ps1` installs Chocolatey (if needed) and the core tools
+(`neovim git ripgrep fd nodejs-lts mingw`), links `%LOCALAPPDATA%\nvim`
+into the repo, and runs the same `Doctor sync`. The in-editor Doctor
+installs system packages through choco on Windows and apt/dnf/pacman on
+Linux (elevated installs open in a terminal split so sudo/UAC output is
+visible).

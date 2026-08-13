@@ -34,11 +34,20 @@ local attempts = {} -- client_id .. ":" .. kind .. ":" .. name -> uv.now() of la
 
 -- List tracked + untracked (non-ignored) files with mtimes, async.
 -- Output lines: "<mtime> <path relative to root>".
+-- stat's flags differ per libc: BSD/mac wants -f '%m %N', GNU/linux -c
+-- '%Y %n'. Windows has neither sh nor xargs nor stat — the watch bridge is
+-- disabled there (FocusGained heal and diagnostics healing still work).
+local sysname = (vim.uv or vim.loop).os_uname().sysname
+local IS_WINDOWS = sysname:find("Windows") ~= nil
+local STAT = sysname == "Darwin" and "stat -f '%m %N'" or "stat -c '%Y %n'"
 local function scan_root(root, cb)
+    if IS_WINDOWS then
+        return cb(nil)
+    end
     vim.system({
         "sh",
         "-c",
-        "git ls-files -co --exclude-standard -z 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null",
+        "git ls-files -co --exclude-standard -z 2>/dev/null | xargs -0 " .. STAT .. " 2>/dev/null",
     }, { cwd = root, text = true }, function(out)
         local stdout = out.stdout or ""
         -- Byte-identical output means identical paths and mtimes, so the
