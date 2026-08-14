@@ -89,6 +89,51 @@ vim.api.nvim_create_autocmd("BufEnter", {
 -- mini.pairs' default `{}` pairing assumes. When `{` is typed at the end of a
 -- statement (if/foreach/method/class/...), push it onto a new line with a
 -- blank indented line and the matching `}` below, instead of pairing inline.
+-- Auto-properties are the exception — see cs_is_property_declaration below.
+
+-- Keywords that introduce a block of their own, so a `{` after one is never a
+-- property accessor list. `new` covers object/collection initializers, which
+-- are Allman-braced too (`var x = new Foo\n{\n    A = 1\n};`).
+local cs_block_keywords = {}
+for word in ([[class struct interface enum record namespace delegate else try
+	finally do switch using lock fixed unsafe checked unchecked new get set
+	add remove init where]]):gmatch("%S+") do
+	cs_block_keywords[word] = true
+end
+
+-- Auto-properties stay on one line (`public float Foo { get; private set; }`)
+-- even in Allman-braced code, so `{` after a property declaration has to pair
+-- in place. What identifies one: after leading attribute groups are dropped,
+-- the line is a bare `<modifiers> <type> <Name>` — no parens (that would be a
+-- method or an `if`/`foreach` head), no `:` (a type's base list), no `=` (an
+-- initializer or a lambda arrow), and no block keyword. Indexers end in `]`
+-- and generic/nullable types (`Dictionary<string, int> Foo`, `float? Foo`)
+-- pass, since the test is only that the final token is a plain identifier.
+local function cs_is_property_declaration(before)
+	local text = before:match("^%s*(.-)%s*$")
+	while true do
+		local rest = text:match("^%b[]%s*(.*)$")
+		if not rest then
+			break
+		end
+		text = rest
+	end
+
+	if text:find("[%(%)=:;{}]") then
+		return false
+	end
+
+	local tokens = {}
+	for token in text:gmatch("%S+") do
+		if cs_block_keywords[token] then
+			return false
+		end
+		tokens[#tokens + 1] = token
+	end
+
+	return #tokens >= 2 and tokens[#tokens]:match("^[%w_]+$") ~= nil
+end
+
 local function cs_allman_open_brace()
 	local ok_pairs, MiniPairs = pcall(require, "mini.pairs")
 	local function default_open()
@@ -119,6 +164,11 @@ local function cs_allman_open_brace()
 			default_open()
 			return
 		end
+	end
+
+	if cs_is_property_declaration(before) then
+		default_open()
+		return
 	end
 
 	local indent = line:match("^%s*")
