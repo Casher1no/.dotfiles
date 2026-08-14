@@ -38,6 +38,11 @@ return {
 
         vim.lsp.enable(servers)
 
+        -- :CodeAction — same intentions menu as <leader>ca / Ctrl+.
+        vim.api.nvim_create_user_command("CodeAction", function()
+            require("util.actions").open()
+        end, { desc = "IDE-style intentions menu" })
+
         vim.api.nvim_create_autocmd("LspAttach", {
             callback = function(args)
                 local bufnr = args.buf
@@ -114,10 +119,28 @@ return {
                 vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, opts)
                 vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, opts)
 
-                -- Code actions and refactoring: JetBrains-style intentions
+                -- Code actions and refactoring: IDE-style intentions
                 -- dropdown at the cursor (LSP actions + treesj split/join),
                 -- see util/actions.lua.
                 vim.keymap.set({ "n", "v" }, "<leader>ca", function()
+                    require("util.actions").open()
+                end, opts)
+                -- VS Code muscle memory: Ctrl+. needs a terminal speaking
+                -- the kitty keyboard protocol (iTerm2 ≥ 3.5 does, Neovim
+                -- requests it itself); Cmd+. needs an iTerm2 key binding
+                -- sending its CSI-u encoding, Esc [46;9u
+                vim.keymap.set({ "n", "v" }, "<C-.>", function()
+                    require("util.actions").open()
+                end, opts)
+                vim.keymap.set({ "n", "v" }, "<D-.>", function()
+                    require("util.actions").open()
+                end, opts)
+                vim.keymap.set("i", "<C-.>", function()
+                    vim.cmd.stopinsert()
+                    require("util.actions").open()
+                end, opts)
+                vim.keymap.set("i", "<D-.>", function()
+                    vim.cmd.stopinsert()
                     require("util.actions").open()
                 end, opts)
                 vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)

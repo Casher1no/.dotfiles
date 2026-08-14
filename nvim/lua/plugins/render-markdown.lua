@@ -6,6 +6,9 @@
 return {
     "MeanderingProgrammer/render-markdown.nvim",
     dependencies = { "nvim-treesitter/nvim-treesitter", "echasnovski/mini.icons" },
+    -- (Markdown buffers leave "E31: No such mapping" in v:errmsg via the
+    -- stock ftplugin's silent!-guarded b:undo_ftplugin — never displayed,
+    -- harmless; noted here so nobody chases it again.)
     ft = { "markdown" },
     cmd = "RenderMarkdown", -- also load when toggled from the palette
     opts = {},

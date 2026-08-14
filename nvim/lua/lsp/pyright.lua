@@ -88,10 +88,10 @@ return {
                 autoSearchPaths = true,
                 useLibraryCodeForTypes = true,
                 diagnosticMode = "openFilesOnly",
-                -- PyCharm-level strictness: keep real problems (undefined
+                -- IDE-level strictness: keep real problems (undefined
                 -- names, broken imports, bad calls) but drop pyright's
                 -- strict-Optional checks ('"reply_text" is not a known
-                -- attribute of "None"') that PyCharm doesn't flag either.
+                -- attribute of "None"') that IDE analyzers do not flag either.
                 -- Delete an override (or set typeCheckingMode = "strict")
                 -- to get the pedantry back.
                 typeCheckingMode = "basic",

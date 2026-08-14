@@ -4,7 +4,7 @@ return {
     event = "InsertEnter",
     opts = {
         keymap = {
-            -- JetBrains-like: Enter and Tab accept, arrows / C-n / C-p navigate
+            -- Enter and Tab accept, arrows / C-n / C-p navigate
             preset = "enter",
             ["<Tab>"] = { "accept", "fallback" },
         },

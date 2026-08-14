@@ -1,4 +1,4 @@
--- JetBrains-style "Problems" panel: diagnostics, references, symbols, quickfix
+-- IDE-style "Problems" panel: diagnostics, references, symbols, quickfix
 -- and TODOs (via todo-comments) in one togglable list.
 -- https://github.com/folke/trouble.nvim
 return {
@@ -11,6 +11,15 @@ return {
         { "<leader>xs", "<cmd>Trouble symbols toggle focus=false<cr>", desc = "Document symbols panel" },
         { "<leader>xr", "<cmd>Trouble lsp toggle focus=false win.position=right<cr>", desc = "LSP references / definitions" },
         { "<leader>xq", "<cmd>Trouble qflist toggle<cr>", desc = "Quickfix list panel" },
-        { "<leader>xt", "<cmd>Trouble todo toggle<cr>", desc = "TODO comments panel" },
+        {
+            "<leader>xt",
+            function()
+                -- todo-comments lazy-loads on BufReadPost; straight from the
+                -- dashboard its trouble source is not registered yet
+                require("lazy").load({ plugins = { "todo-comments.nvim" } })
+                vim.cmd("Trouble todo toggle")
+            end,
+            desc = "TODO comments panel",
+        },
     },
 }

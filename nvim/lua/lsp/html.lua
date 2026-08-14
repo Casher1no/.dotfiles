@@ -1,6 +1,6 @@
 -- vscode-html-language-server (mason: html) — tag/attribute completion,
 -- hover, formatting. Tag *closing* and paired *renaming* are handled by
--- nvim-ts-autotag (see plugins/autotag.lua), JetBrains-style.
+-- nvim-ts-autotag (see plugins/autotag.lua).
 ---@type vim.lsp.Config
 return {
     cmd = { "vscode-html-language-server", "--stdio" },

@@ -1,4 +1,4 @@
--- Full-width row tints for special folders in neo-tree (JetBrains style):
+-- Full-width row tints for special folders in neo-tree:
 -- package/library roots and everything inside them get a gray background,
 -- test roots and their contents a light green one.
 --

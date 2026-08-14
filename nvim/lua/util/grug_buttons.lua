@@ -12,8 +12,8 @@
 -- results, <Up> walks back the same way (j/k skip over it). While inside,
 -- cursorline shows the selection like the palette; <CR> presses the entry,
 -- <Esc>/q bail back to the search fields. "Replace" applies the change on
--- the current result line and moves to the next match (JetBrains
--- "Replace") without opening any window; "Replace All" applies everything.
+-- the current result line and moves to the next match, one at a time,
+-- without opening any window; "Replace All" applies everything.
 -- The float follows the inputs as they grow/scroll and hides when they
 -- leave the viewport.
 local M = {}

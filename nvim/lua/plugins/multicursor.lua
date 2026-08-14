@@ -1,4 +1,4 @@
--- Real multiple cursors (JetBrains-style): every line of a visual selection
+-- Real multiple cursors (IDE-style): every line of a visual selection
 -- gets its own cursor and edits appear on all lines live as you type —
 -- unlike vim's built-in block insert, which replays the edit on the other
 -- lines only after leaving insert mode.

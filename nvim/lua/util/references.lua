@@ -190,7 +190,7 @@ function M.open(opts)
         end
 
         -- hide_tests drops usages in test folders/files (<C-t> toggles it,
-        -- like the filter buttons on JetBrains' Find Usages panel). The full
+        -- like the filter buttons on an IDE usages panel). The full
         -- item list stays in this closure, so toggling just rebuilds the
         -- picker from it with the typed query kept.
         local function show(hide_tests, text)

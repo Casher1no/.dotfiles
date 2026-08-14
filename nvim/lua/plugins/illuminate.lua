@@ -1,5 +1,5 @@
 -- Automatically highlight other occurrences of the symbol under the cursor
--- (LSP first, then treesitter, then plain text) — like Rider/PyCharm's
+-- (LSP first, then treesitter, then plain text) — like an IDE's
 -- identifier highlighting. <A-n> / <A-p> jump between the occurrences.
 -- https://github.com/RRethy/vim-illuminate
 return {

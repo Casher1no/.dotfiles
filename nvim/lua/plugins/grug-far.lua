@@ -1,4 +1,4 @@
--- Project-wide find & replace on ripgrep — JetBrains "Replace in Files".
+-- Project-wide find & replace on ripgrep — "Replace in Files".
 -- Opens a buffer UI: type the search and replacement, results update live
 -- with the keybinds listed in its header (replace-all, sync a single line,
 -- open a result). <leader>sr stays the file-scoped :substitute; this is the
@@ -32,7 +32,7 @@ return {
         },
     },
     opts = {
-        -- JetBrains-style: literal matching by default, so replacing ":"
+        -- Literal matching by default, so replacing ":"
         -- with "-" needs no regex escaping; delete the flag in the UI's
         -- Flags field for a regex search
         engines = { ripgrep = { extraArgs = "--fixed-strings" } },

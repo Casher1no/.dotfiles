@@ -35,7 +35,7 @@ return {
     },
     cmd = "Telescope", -- also load when invoked as :Telescope (e.g. from the dashboard)
     keys = {
-        -- JetBrains-style: <C-p> for files, double-shift feel via <leader>ff
+        -- IDE-style: <C-p> for files, double-shift feel via <leader>ff
         { "<C-p>", "<cmd>Telescope find_files<cr>", desc = "Find files" },
         -- ff/fg go through util/telescope_case.lua: always case-insensitive
         -- on open; <C-s> in the prompt toggles match case for that search
@@ -80,7 +80,7 @@ return {
 
         return {
             defaults = {
-                -- JetBrains "Search Everywhere" look:
+                -- "Search Everywhere" look:
                 -- prompt + file list on top, content preview on the bottom.
                 layout_strategy = "vertical",
                 layout_config = {

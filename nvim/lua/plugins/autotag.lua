@@ -1,4 +1,4 @@
--- JetBrains-style tag behavior, powered by treesitter:
+-- IDE-style tag behavior, powered by treesitter:
 --   - type `<div>` and the closing `</div>` appears with the cursor between
 --   - edit the opening tag (`div` → `a`) and the closing tag renames along
 -- Works in html, vue, php (blade/inertia templates), jsx/tsx, xml, markdown.

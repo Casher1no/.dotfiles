@@ -1,13 +1,14 @@
--- JetBrains-style intentions menu, replacing vim.lsp.buf.code_action for
+-- IDE-style intentions menu, replacing vim.lsp.buf.code_action for
 -- <leader>ca (plugins/lsp.lua): a dropdown anchored at the cursor line —
 -- not a centered picker — listing every code action from every attached
--- client, then non-LSP refactors that fit the cursor context (currently
--- treesj: "Split …" when the node under the cursor is on one line, "Join …"
--- when it is already spread out). 1-9 pick directly, j/k/arrows + <CR>
--- navigate, <Esc>/q close.
+-- client, then non-LSP refactors that fit the cursor context: the
+-- IDE-style intentions from util/intentions.lua (invert if, surround
+-- with try/catch) and treesj ("Split …" when the node under the cursor is
+-- on one line, "Join …" when it is already spread out). 1-9 pick directly,
+-- j/k/arrows + <CR> navigate, <Esc>/q close.
 local M = {}
 
--- JetBrains ordering: what fixes the code under the cursor comes first,
+-- Ordering: what fixes the code under the cursor comes first,
 -- boilerplate generators last. LSP kinds map cleanly onto that — quickfix.*
 -- addresses a diagnostic, refactor.* transforms what's there, source.*
 -- (generate getters, organize imports, sort members …) adds new code.
@@ -220,6 +221,66 @@ end
 
 -- ------------------------------------------------------- gather and apply
 
+-- Extract refactors insert a server-chosen placeholder name (tsserver:
+-- newFunction/newLocal, jdtls: extracted, roslyn: NewMethod) and expect the
+-- editor to start a rename — VS Code does, stock Neovim does not. Our
+-- flow instead: the name is asked for up front (see apply_action), and once
+-- the server's edit lands (watched via changedtick — jdtls applies its
+-- asynchronously), the placeholder nearest the cursor is LSP-renamed to it.
+local EXTRACT_PLACEHOLDERS =
+    { "newFunction", "newMethod", "newLocal", "newVariable", "NewMethod", "extracted" }
+
+-- After an extract, vtsls asks the client to start a rename at the inserted
+-- name via the VS Code command editor.action.rename([uri, position]) —
+-- unimplemented in stock Neovim, which errors "does not support command".
+-- Move the cursor there instead: rename_extracted then renames exactly it.
+vim.lsp.commands["editor.action.rename"] = function(cmd)
+    local uri, pos = cmd.arguments and cmd.arguments[1], cmd.arguments and cmd.arguments[2]
+    if type(uri) == "string" and type(pos) == "table" then
+        local win = vim.fn.bufwinid(vim.uri_to_bufnr(uri))
+        if win ~= -1 then
+            pcall(vim.api.nvim_win_set_cursor, win, { (pos.line or 0) + 1, pos.character or 0 })
+        end
+    end
+end
+
+local function rename_extracted(bufnr, name)
+    local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+    local tries = 0
+    local function poll()
+        if not vim.api.nvim_buf_is_valid(bufnr) then
+            return
+        end
+        if vim.api.nvim_buf_get_changedtick(bufnr) == tick then
+            tries = tries + 1
+            if tries < 30 then
+                vim.defer_fn(poll, 100)
+            end
+            return
+        end
+        -- small settle delay: multi-part edits, jdtls's own cursor move
+        vim.defer_fn(function()
+            local cur = vim.api.nvim_win_get_cursor(0)[1]
+            local best, best_d
+            for i, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+                for _, ph in ipairs(EXTRACT_PLACEHOLDERS) do
+                    local col = line:find("%f[%w_]" .. ph .. "%f[^%w_]")
+                    if col and (not best or math.abs(i - cur) < best_d) then
+                        best, best_d = { i, col - 1 }, math.abs(i - cur)
+                    end
+                end
+            end
+            if not best then
+                vim.notify("Extracted — rename the placeholder manually", vim.log.levels.INFO)
+                return
+            end
+            pcall(vim.api.nvim_win_set_cursor, 0, best)
+            vim.lsp.buf.rename(name)
+        end, 200)
+    end
+    poll()
+end
+
 -- Resolve-then-apply, mirroring what vim.lsp.buf.code_action does after its
 -- picker: result items are Command | CodeAction, and CodeActions may need a
 -- codeAction/resolve round-trip to fill in their edit. The exec_cmd context
@@ -244,13 +305,29 @@ local function apply_action(item, bufnr)
         end
     end
     local action = item.action
-    if type(action.command) ~= "string" and not action.edit and client:supports_method("codeAction/resolve") then
-        client:request("codeAction/resolve", action, function(err, resolved)
-            run(resolved or action) -- unresolvable: try what the server sent
-        end, bufnr)
-    else
-        run(action)
+    local function proceed()
+        if type(action.command) ~= "string" and not action.edit and client:supports_method("codeAction/resolve") then
+            client:request("codeAction/resolve", action, function(err, resolved)
+                run(resolved or action) -- unresolvable: try what the server sent
+            end, bufnr)
+        else
+            run(action)
+        end
     end
+
+    -- Extract flow: name first, then apply + rename placeholder.
+    -- Cancelling the prompt cancels the whole extraction.
+    if (action.kind or ""):find("^refactor%.extract") then
+        vim.ui.input({ prompt = "Extract as: " }, function(name)
+            if not name or name == "" then
+                return
+            end
+            rename_extracted(bufnr, name)
+            proceed()
+        end)
+        return
+    end
+    proceed()
 end
 
 -- Collect entries (LSP + treesj) and hand them to cb — separated from the
@@ -260,18 +337,33 @@ function M._entries(cb)
     local win = vim.api.nvim_get_current_win()
     local mode = vim.api.nvim_get_mode().mode
 
-    -- Selection range while still in visual mode ('< '> only update on exit)
+    -- Selection range while still in visual mode ('< '> only update on exit).
+    -- Linewise V spans whole lines — getpos cols are cursor cols, and a
+    -- range cut mid-statement makes servers refuse refactors ("Cannot
+    -- extract range") that the full lines would support.
     local range
     if mode:find("[vV\22]") then
         local s, e = vim.fn.getpos("v"), vim.fn.getpos(".")
         if s[2] > e[2] or (s[2] == e[2] and s[3] > e[3]) then
             s, e = e, s
         end
-        range = { start_pos = { s[2], s[3] - 1 }, end_pos = { e[2], e[3] - 1 } }
+        if mode == "V" then
+            range = { start_pos = { s[2], 0 }, end_pos = { e[2], #vim.fn.getline(e[2]) } }
+        else
+            range = { start_pos = { s[2], s[3] - 1 }, end_pos = { e[2], e[3] - 1 } }
+        end
         vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
     end
 
-    local extras = treesj_entries(bufnr)
+    -- bottom section: IDE-style intentions (invert if, loop
+    -- conversions, surround with try/catch — util/intentions.lua), then the
+    -- treesj split/join. A visual selection narrows this to wrapping the
+    -- selected lines; cursor intentions and treesj don't apply to a range.
+    local sel = range and { range.start_pos[1], range.end_pos[1] }
+    local extras = require("util.intentions").entries(bufnr, nil, sel)
+    if not sel then
+        vim.list_extend(extras, treesj_entries(bufnr))
+    end
     local lnum = vim.api.nvim_win_get_cursor(win)[1] - 1
 
     local clients = vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/codeAction" })
@@ -299,6 +391,11 @@ function M._entries(cb)
         for _, item in ipairs(M._dedupe(results)) do
             local action, client_id = item.action, item.client_id
             local group = group_for(action.kind)
+            -- a selection menu is about the selection: file/class-scoped
+            -- generators (organize imports, generate getters, …) drop out
+            if range and group.rank == 3 then
+                goto continue
+            end
             collected[#collected + 1] = {
                 label = action.title,
                 rank = group.rank,
@@ -314,6 +411,7 @@ function M._entries(cb)
                     }, bufnr)
                 end,
             }
+            ::continue::
         end
         table.sort(collected, function(a, b)
             if a.rank ~= b.rank then
@@ -356,6 +454,11 @@ local function dedupe_results(results)
     local picked, by_title = {}, {}
     for client_id, res in pairs(results or {}) do
         for _, action in ipairs(res.result or {}) do
+            -- category placeholders the server itself marks unrunnable
+            -- (vtsls: "Extract function" with "Cannot extract range")
+            if action.disabled then
+                goto continue
+            end
             local prev = by_title[action.title]
             if not prev then
                 picked[#picked + 1] = { action = action, client_id = client_id }
@@ -363,6 +466,7 @@ local function dedupe_results(results)
             elseif (prev.action.kind or "") == "" and (action.kind or "") ~= "" then
                 prev.action, prev.client_id = action, client_id
             end
+            ::continue::
         end
     end
     return picked

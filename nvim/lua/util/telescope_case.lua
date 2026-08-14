@@ -1,4 +1,4 @@
--- JetBrains-style match-case toggle for find_files / live_grep (wired to the
+-- IDE-style match-case toggle for find_files / live_grep (wired to the
 -- keymaps in plugins/telescope.lua). Pickers always open case-insensitive —
 -- Telescope's default live_grep is --smart-case, so one capital letter used
 -- to silently make the search case-sensitive. A badge on the right side of
@@ -15,7 +15,7 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("telescope_case_badge")
 
--- Right-aligned state badges in the prompt line, JetBrains filter-button
+-- Right-aligned state badges in the prompt line, filter-button
 -- style. Sit next to Telescope's own "m / n" counter (also right-aligned
 -- virtual text), so keep them short.
 local function place_badge(prompt_bufnr, state)
@@ -83,7 +83,7 @@ local function sensitive_file_sorter()
     return sorter
 end
 
--- Highlight the typed query inside the grep preview (JetBrains-style: every
+-- Highlight the typed query inside the grep preview (IDE-style: every
 -- occurrence of the searched word lights up, not just the matched line).
 -- The preview WINDOW survives entry switches, so one window-local matchadd
 -- covers every previewed file; it's refreshed on each prompt edit and its

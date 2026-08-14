@@ -42,6 +42,13 @@ return {
         popupmenu = {
             enabled = true,
         },
+        -- LSP progress stays visible for the meaningful one-time phases
+        -- (importing projects, building workspace, service ready) but the
+        -- per-keystroke spam jdtls emits on every edit is dropped.
+        routes = {
+            { filter = { event = "lsp", kind = "progress", find = "Validate documents" }, opts = { skip = true } },
+            { filter = { event = "lsp", kind = "progress", find = "Publish Diagnostics" }, opts = { skip = true } },
+        },
         -- Centers the cmdline popup and its suggestion popupmenu together.
         presets = {
             command_palette = true,

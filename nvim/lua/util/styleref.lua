@@ -1,5 +1,5 @@
 -- Cross-referencing between stylesheets and templates — the piece no CSS
--- language server provides (JetBrains does it with its own indexer):
+-- language server provides (full IDEs do it with their own indexer):
 --
 --   stylesheet, gr on `.card` / `#header`  → every usage across templates
 --                                            (class="..."), Angular bindings

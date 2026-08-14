@@ -10,7 +10,7 @@ local M = {}
 -- Find method-call sites of `word` under `root`; cb(items) on the main
 -- loop with quickfix-style items ({ filename, lnum, col, text }).
 function M.method_calls(word, root, cb)
-    if vim.fn.executable("rg") ~= 1 or word == "" then
+    if vim.fn.executable("rg") ~= 1 or not word or word == "" then
         cb({})
         return
     end

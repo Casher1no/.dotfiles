@@ -23,6 +23,11 @@ vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,term
 
 vim.g.mapleader = " "
 
+-- Quitting with unsaved buffers asks "Save changes?" (IDE close dialog)
+-- instead of failing with E37/E162 — refactors from the actions menu edit
+-- buffers without writing them, so this comes up after invert/extract too.
+vim.o.confirm = true
+
 -- Save file with Ctrl+S
 vim.keymap.set("n", "<C-S>", ":w<CR>", { desc = "Save file" })
 vim.keymap.set("i", "<C-S>", "<Esc>:w<CR>", { desc = "Save file" })
