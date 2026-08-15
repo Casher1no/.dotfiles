@@ -72,6 +72,19 @@ M.STACKS = {
         end,
     },
     {
+        key = "cpp",
+        matches = function(dir)
+            -- A folder of LeetCode solutions has no manifest of any kind, so
+            -- loose .cpp/.hpp files count as the marker of last resort.
+            return has(dir, "CMakeLists.txt")
+                or has(dir, "Makefile")
+                or has(dir, "compile_commands.json")
+                or has(dir, ".clangd")
+                or #vim.fn.glob(dir .. "/*.cpp", false, true) > 0
+                or #vim.fn.glob(dir .. "/*.hpp", false, true) > 0
+        end,
+    },
+    {
         key = "csharp",
         matches = function(dir)
             if is_unity_root(dir) then

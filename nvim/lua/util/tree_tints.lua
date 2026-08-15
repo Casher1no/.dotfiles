@@ -118,7 +118,7 @@ local states = {}
 -- when the buffer content changes (every neo-tree render rewrites the
 -- buffer, bumping the tick — including the render paths that fire no
 -- event). Keeps the per-frame callbacks cheap and deterministic; plugins
--- like noice and smear-cursor force full redraws constantly.
+-- like noice force full redraws constantly.
 local tints = {}
 -- Cursor line per window, so the tint can yield to CursorLine (a bg-only
 -- CursorLine loses to any extmark range bg regardless of priority).

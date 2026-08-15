@@ -7,7 +7,9 @@
 $ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigDir = Join-Path $env:LOCALAPPDATA "nvim"
-$CoreTools = @("neovim", "git", "ripgrep", "fd", "nodejs-lts", "mingw")
+# llvm brings clangd (and clang-format) for the C/C++ layer; mingw is what
+# actually compiles, and clangd is configured to follow it (util/clangd_config.lua).
+$CoreTools = @("neovim", "git", "ripgrep", "fd", "nodejs-lts", "mingw", "llvm")
 
 function Say($msg) { Write-Host "==> $msg" -ForegroundColor Blue }
 function Warn($msg) { Write-Host "warning: $msg" -ForegroundColor Yellow }

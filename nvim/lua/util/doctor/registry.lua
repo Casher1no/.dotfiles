@@ -36,7 +36,7 @@ M.treesitter_parsers = {
     "python", "php", "vue", "typescript", "javascript", "c_sharp", "java",
     "lua", "html", "angular", "css", "scss", "json", "yaml", "toml", "bash",
     "markdown", "markdown_inline", "regex", "vim", "vimdoc", "gitcommit",
-    "diff", "dockerfile", "sql",
+    "diff", "dockerfile", "sql", "c", "cpp",
 }
 
 local uv = vim.uv or vim.loop
@@ -86,11 +86,34 @@ M.entries = {
     },
     {
         id = "cc", name = "C compiler", group = "Core tools",
-        needed_for = "compiling the 25 treesitter parsers",
+        needed_for = "compiling the treesitter parsers; also builds C/C++ buffers",
         check = { bin = { "cc", "gcc", "clang" } },
         -- mac: clang ships with the Xcode CLT, not brew; windows: mingw's gcc
         install = M.os == "mac" and { cmd = { "xcode-select", "--install" } }
             or { choco = "mingw", apt = "build-essential", dnf = "gcc", pacman = "base-devel" },
+    },
+    {
+        id = "tree-sitter", name = "tree-sitter CLI", group = "Core tools",
+        needed_for = "nvim-treesitter's main branch shells out to it to build every parser",
+        -- Spawned, not just located: npm's global install on Windows leaves an
+        -- extension-less sh shim that vim.fn.exepath happily returns and libuv
+        -- cannot execute, which fails parser builds with a bare ENOENT.
+        -- plugins/treesitter.lua puts the real binary on PATH; this proves it.
+        check = {
+            fn = function()
+                local ok, result = pcall(function()
+                    return vim.system({ "tree-sitter", "--version" }, { text = true }):wait()
+                end)
+                if not ok then
+                    return "missing", "on PATH but not executable (npm shim?)"
+                end
+                if result.code ~= 0 then
+                    return "missing", "exited " .. result.code
+                end
+                return "ok", vim.trim(result.stdout or "")
+            end,
+        },
+        install = { cmd = { "npm", "install", "-g", "tree-sitter-cli" } },
     },
     {
         id = "curl", name = "curl", group = "Core tools",
@@ -158,6 +181,23 @@ M.entries = {
         check = { bin = "dotnet" },
         version = { cmd = { "dotnet", "--version" } },
         install = { cask = "dotnet-sdk", choco = "dotnet-sdk", apt = "dotnet-sdk-8.0", pacman = "dotnet-sdk" },
+    },
+    {
+        id = "cxx", name = "C++ compiler", group = "Language runtimes", optional = true,
+        needed_for = "building/running C++ buffers (<F8>, util/cpp.lua) and the -g DWARF codelldb reads",
+        check = { bin = { "g++", "clang++" } },
+        version = { cmd = { "g++", "--version" } },
+        install = M.os == "mac" and { cmd = { "xcode-select", "--install" } }
+            or { choco = "mingw", apt = "g++", dnf = "gcc-c++", pacman = "base-devel" },
+    },
+    {
+        id = "clangd", name = "clangd (C/C++ LSP)", group = "Language runtimes", optional = true,
+        needed_for = "completion/diagnostics/navigation in C and C++ (lua/lsp/clangd.lua)",
+        -- Not a mason package on purpose: it has to match the toolchain that
+        -- compiles the code, so it comes from the same place the compiler does.
+        check = { bin = "clangd" },
+        version = { cmd = { "clangd", "--version" } },
+        install = { brew = "llvm", choco = "llvm", apt = "clangd", dnf = "clang-tools-extra", pacman = "clang" },
     },
 
     -- ── Editor layer ───────────────────────────────────────────────────
@@ -285,6 +325,13 @@ M.entries = {
                 return "ok"
             end
             return "warn", "not cloned — init.lua skips it when absent"
+        end },
+    },
+    {
+        id = "clangd-config", name = "clangd → g++ override", group = "Environment", optional = true,
+        needed_for = "stopping clangd's Windows build from targeting MSVC (see util/clangd_config.lua)",
+        check = { fn = function()
+            return require("util.clangd_config").status()
         end },
     },
     {

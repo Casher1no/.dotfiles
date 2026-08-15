@@ -21,6 +21,12 @@ vim.opt.colorcolumn = "120"
 -- What persistence.nvim stores in a session (buffers, layout, cwd, …)
 vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
 
+-- Persist the undo tree to disk so <C-z>/<C-S-z> still work after reopening a
+-- file — without this the history dies with the buffer. Writes into the
+-- default undodir (stdpath("state")/undo), which Neovim creates on demand.
+vim.opt.undofile = true
+vim.opt.undolevels = 10000
+
 vim.g.mapleader = " "
 
 -- Quitting with unsaved buffers asks "Save changes?" (IDE close dialog)
@@ -35,6 +41,22 @@ vim.keymap.set("i", "<C-S>", "<Esc>:w<CR>", { desc = "Save file" })
 vim.keymap.set("n", "<C-v>", '"+p', { desc = "Paste from clipboard" })
 vim.keymap.set("v", "<C-v>", '"+P', { desc = "Paste from clipboard" })
 vim.keymap.set("i", "<C-v>", "<C-r><C-o>+", { desc = "Paste from clipboard" })
+
+-- Terminal mode needs its own paste: <C-r> doesn't exist there and the buffer
+-- isn't modifiable, so `p` has nothing to paste into. Write the register
+-- straight down the job's channel instead — the same thing your terminal
+-- emulator does. Newlines become <CR> so a multi-line paste runs line by line
+-- the way it would in any other terminal.
+local function terminal_paste()
+    local job = vim.b.terminal_job_id
+    if not job then
+        return
+    end
+    local text = vim.fn.getreg("+"):gsub("\r\n", "\n"):gsub("\n", "\r")
+    vim.api.nvim_chan_send(job, text)
+end
+vim.keymap.set("t", "<C-v>", terminal_paste, { desc = "Paste from clipboard" })
+vim.keymap.set("t", "<D-v>", terminal_paste, { desc = "Paste from clipboard" })
 
 vim.keymap.set("v", "<C-x>", '"+d', { desc = "Cut to clipboard" })
 vim.keymap.set("v", "<C-c>", '"+y', { desc = "Copy to clipboard" })
@@ -87,6 +109,15 @@ vim.keymap.set("n", "<A-Up>", ":m .-2<CR>==", { desc = "Move current line up" })
 
 vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
 vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
+
+-- Redo, to pair with the <C-z> undo above. <C-S-z> only reaches Neovim from
+-- terminals that send distinct modified keys (kitty keyboard protocol / CSI u)
+-- and from GUI clients like Neovide; <C-y> is the fallback that always works,
+-- and native <C-r> keeps working regardless.
+vim.keymap.set("n", "<C-S-z>", "<C-r>", { desc = "Redo last undone action" })
+vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { desc = "Redo last undone action in insert mode" })
+vim.keymap.set("n", "<C-y>", "<C-r>", { desc = "Redo last undone action" })
+vim.keymap.set("i", "<C-y>", "<C-o><C-r>", { desc = "Redo last undone action in insert mode" })
 
 -- Go to previous (alternate) file with Cmd+6.
 -- In iTerm2 this fires because Cmd+6 is set to send 0x1e (= <C-^>); this
@@ -193,14 +224,23 @@ end, {
 	desc = "Dependency doctor: report / sync / install / update / log",
 })
 
--- Run a saved project task (manage them in the palette → Project Commands)
-vim.keymap.set("n", "<leader>r", function()
+-- Run a saved project task (manage them in the palette → Project Commands).
+-- <leader>rr, not <leader>r: the latter is a strict prefix of <leader>rn
+-- (LSP rename), so every press sat waiting out 'timeoutlen' first.
+vim.keymap.set("n", "<leader>rr", function()
 	require("util.tasks").run_interactive()
 end, { desc = "Run project task" })
 
+-- Esc in a terminal jumps straight back to the code window. <C-w>p is the
+-- last-accessed window; when the terminal is the only window it's a no-op and
+-- util/terminal.lua puts you back on the input line.
+--
+-- Cost: the terminal program no longer receives Esc — notably Claude Code,
+-- where Esc cancels. Use <C-\><C-n> if you need terminal-normal mode itself.
+vim.keymap.set("t", "<Esc>", [[<C-\><C-n><C-w>p]], { desc = "Back to the code window" })
+
 -- Terminal: let <C-w> window motions work straight from terminal-insert mode
--- so you can jump out of terminals without first pressing
--- <C-\><C-n>. Esc stays untouched for terminal TUIs.
+-- so you can jump out of terminals without first pressing <C-\><C-n>.
 vim.keymap.set("t", "<C-w>h", [[<C-\><C-n><C-w>h]], { desc = "Go to left window" })
 vim.keymap.set("t", "<C-w>j", [[<C-\><C-n><C-w>j]], { desc = "Go to lower window" })
 vim.keymap.set("t", "<C-w>k", [[<C-\><C-n><C-w>k]], { desc = "Go to upper window" })

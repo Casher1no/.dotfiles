@@ -1,0 +1,84 @@
+{
+    "LeetCode Solution class": {
+        "prefix": "solution",
+        "body": ["class Solution {", "public:", "\t$0", "};"]
+    },
+    "Main": {
+        "prefix": "main",
+        "body": ["int main() {", "\t$0", "\treturn 0;", "}"]
+    },
+    "Fast IO": {
+        "prefix": "fastio",
+        "body": ["ios_base::sync_with_stdio(false);", "cin.tie(nullptr);", "$0"]
+    },
+    "Range for": {
+        "prefix": "forr",
+        "body": ["for (auto& ${1:x} : ${2:container}) {", "\t$0", "}"]
+    },
+    "Index for": {
+        "prefix": "fori",
+        "body": ["for (int ${1:i} = 0; $1 < ${2:n}; ++$1) {", "\t$0", "}"]
+    },
+    "Vector of int": {
+        "prefix": "vi",
+        "body": ["vector<int> ${1:v};$0"]
+    },
+    "Vector of vector of int": {
+        "prefix": "vvi",
+        "body": ["vector<vector<int>> ${1:grid}(${2:rows}, vector<int>(${3:cols}, ${4:0}));$0"]
+    },
+    "Unordered map": {
+        "prefix": "um",
+        "body": ["unordered_map<${1:int}, ${2:int}> ${3:seen};$0"]
+    },
+    "Unordered set": {
+        "prefix": "us",
+        "body": ["unordered_set<${1:int}> ${2:seen};$0"]
+    },
+    "Pair of int": {
+        "prefix": "pii",
+        "body": ["pair<int, int> ${1:p};$0"]
+    },
+    "Sort ascending": {
+        "prefix": "sortv",
+        "body": ["sort(${1:v}.begin(), $1.end());$0"]
+    },
+    "Sort with comparator": {
+        "prefix": "sortby",
+        "body": [
+            "sort(${1:v}.begin(), $1.end(), [](const auto& a, const auto& b) {",
+            "\treturn ${2:a < b};",
+            "});$0"
+        ]
+    },
+    "Lower bound": {
+        "prefix": "lb",
+        "body": ["auto ${1:it} = lower_bound(${2:v}.begin(), $2.end(), ${3:target});$0"]
+    },
+    "Min-heap": {
+        "prefix": "pqmin",
+        "body": ["priority_queue<${1:int}, vector<$1>, greater<$1>> ${2:pq};$0"]
+    },
+    "Max-heap": {
+        "prefix": "pqmax",
+        "body": ["priority_queue<${1:int}> ${2:pq};$0"]
+    },
+    "Read n integers": {
+        "prefix": "readn",
+        "body": [
+            "int ${1:n};",
+            "cin >> $1;",
+            "vector<int> ${2:v}($1);",
+            "for (int& x : $2) cin >> x;",
+            "$0"
+        ]
+    },
+    "Debug print to cerr": {
+        "prefix": "dbg",
+        "body": ["cerr << \"${1:label} = \" << ${2:value} << '\\n';$0"]
+    },
+    "Print vector": {
+        "prefix": "printv",
+        "body": ["for (const auto& x : ${1:v}) cout << x << ' ';", "cout << '\\n';$0"]
+    }
+}

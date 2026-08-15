@@ -18,6 +18,7 @@ return {
                     "javadbg", -- java-debug-adapter (bundle for jdtls)
                     "javatest", -- vscode-java-test (bundle for jdtls)
                     "python", -- debugpy
+                    "codelldb", -- C/C++ (LLDB; reads the DWARF g++ emits)
                 },
                 -- Let mason-nvim-dap auto-create adapters/configs for netcoredbg
                 -- and php. Java is handled by nvim-jdtls, not here.
@@ -120,6 +121,37 @@ return {
                 )
             end
         end
+
+        -- C/C++: recompile the current file with -O0 -g, then launch it under
+        -- codelldb (mason-nvim-dap registers the adapter). Compiling as part
+        -- of starting the session is what makes F5 a one-key action on a
+        -- scratch file — there's no build system to have done it already.
+        -- build_sync blocks while g++ runs; on a compile error it fills the
+        -- quickfix list and ABORT stops the session from starting.
+        dap.configurations.cpp = {
+            {
+                name = "Build and debug current file",
+                type = "codelldb",
+                request = "launch",
+                program = function()
+                    local src = vim.api.nvim_buf_get_name(0)
+                    if src == "" then
+                        vim.notify("Buffer has no file name — save it first", vim.log.levels.WARN)
+                        return dap.ABORT
+                    end
+                    if vim.bo.modified then
+                        vim.cmd("silent write")
+                    end
+                    return require("util.cpp").build_sync(src, { debug = true }) or dap.ABORT
+                end,
+                cwd = "${fileDirname}",
+                stopOnEntry = false,
+                -- stdin/stdout in a real terminal, so a solution that reads
+                -- input still works under the debugger.
+                terminal = "integrated",
+            },
+        }
+        dap.configurations.c = dap.configurations.cpp
 
         -- Python: debugpy (installed by mason above) runs the adapter; the
         -- debugged program's interpreter comes from nvim-dap-python's

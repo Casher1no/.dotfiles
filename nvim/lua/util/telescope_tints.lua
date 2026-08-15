@@ -26,8 +26,8 @@ local cache = {}
 
 -- Live TelescopeResults buffers, kept by the autocmds below. The decoration
 -- provider is global and permanent: once registered, on_win fires for every
--- window on every redraw for the rest of the session (smear-cursor forces
--- redraws at animation framerate), so its gate must be a plain table lookup
+-- window on every redraw for the rest of the session (noice and friends force
+-- redraws constantly), so its gate must be a plain table lookup
 -- — even a vim.bo option read is too hot there.
 local results_bufs = {}
 

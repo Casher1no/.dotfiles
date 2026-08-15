@@ -29,6 +29,10 @@ vim.api.nvim_create_autocmd("BufEnter", {
 	end,
 })
 
+-- Keep focused terminals in terminal mode, and make finished ones dismissible
+-- instead of frozen — see util/terminal.lua for why both halves are needed.
+require("util.terminal").setup()
+
 -- checktime only refreshes buffers; language servers keep their own project
 -- model and go stale the same way (phantom "cannot find X" errors after AI
 -- tools or git rewrite files). util/lsp_refresh.lua pushes disk changes to
@@ -194,3 +198,22 @@ vim.api.nvim_create_autocmd("FileType", {
 		})
 	end,
 })
+
+-- C/C++: compile the current file and run it in a terminal (util/cpp.lua).
+-- Buffer-local so <F8> stays free everywhere else; :CppRun is the same thing
+-- for when the file is open in a split you're not focused on.
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = { "cpp", "c" },
+	group = vim.api.nvim_create_augroup("cpp_build_run", { clear = true }),
+	callback = function(args)
+		local function run()
+			require("util.cpp").run()
+		end
+		vim.keymap.set("n", "<F8>", run, { buffer = args.buf, desc = "C++: build and run this file" })
+		vim.keymap.set("n", "<leader>cr", run, { buffer = args.buf, desc = "C++: build and run this file" })
+	end,
+})
+
+vim.api.nvim_create_user_command("CppRun", function()
+	require("util.cpp").run()
+end, { desc = "Compile the current C/C++ file and run it" })

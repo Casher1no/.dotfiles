@@ -88,6 +88,22 @@ M.categories = {
                     end,
                 }
             end
+            -- Recently run commands, already expanded — picking one re-runs it
+            -- verbatim, placeholder answers and all, with no prompting.
+            local recent = tasks.history()
+            if #recent > 0 then
+                items[#items + 1] = { desc = "Recent", section = true }
+                for _, entry in ipairs(recent) do
+                    items[#items + 1] = {
+                        desc = entry.name,
+                        keys = entry.cmd,
+                        action = function()
+                            tasks.run_recent(entry)
+                        end,
+                    }
+                end
+                items[#items + 1] = { desc = "Manage", section = true }
+            end
             items[#items + 1] = {
                 desc = "＋ Add task…",
                 action = function()
@@ -465,7 +481,7 @@ M.categories = {
             { desc = "Hover docs / error on line", keys = "K" },
             { desc = "Scroll docs popup (when open)", keys = "<S-Down> / <S-Up>" },
             { desc = "Scroll popup sideways", keys = "<S-Left> / <S-Right>" },
-            { desc = "Run project task", keys = "<leader>r" },
+            { desc = "Run project task", keys = "<leader>rr" },
             { desc = "Comment line", keys = "gcc" },
             { desc = "Comment selection (visual)", keys = "gc" },
             { desc = "Comment a motion (e.g. gcap)", keys = "gc{motion}" },

@@ -4,6 +4,10 @@
             {
                 "language": "cs",
                 "path": "./csharp.json"
+            },
+            {
+                "language": "cpp",
+                "path": "./cpp.json"
             }
         ]
     }

@@ -8,7 +8,8 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
-CORE_TOOLS=(neovim git ripgrep fd node)
+# llvm carries clangd + clang-format for the C/C++ layer
+CORE_TOOLS=(neovim git ripgrep fd node llvm)
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*"; }
@@ -35,15 +36,15 @@ Linux)
         say "apt-get install core tools (needs sudo)"
         sudo apt-get update || warn "apt-get update reported errors — continuing"
         # fd is fd-find on debian/ubuntu; neovim from apt may be old — Doctor flags < 0.12
-        sudo apt-get install -y neovim git ripgrep fd-find nodejs npm build-essential curl unzip ||
+        sudo apt-get install -y neovim git ripgrep fd-find nodejs npm build-essential clangd curl unzip ||
             warn "apt reported errors — Doctor will show what's still missing"
     elif command -v dnf >/dev/null 2>&1; then
         say "dnf install core tools (needs sudo)"
-        sudo dnf install -y neovim git ripgrep fd-find nodejs npm gcc curl unzip ||
+        sudo dnf install -y neovim git ripgrep fd-find nodejs npm gcc gcc-c++ clang-tools-extra curl unzip ||
             warn "dnf reported errors — Doctor will show what's still missing"
     elif command -v pacman >/dev/null 2>&1; then
         say "pacman install core tools (needs sudo)"
-        sudo pacman -S --noconfirm --needed neovim git ripgrep fd nodejs npm base-devel curl unzip ||
+        sudo pacman -S --noconfirm --needed neovim git ripgrep fd nodejs npm base-devel clang curl unzip ||
             warn "pacman reported errors — Doctor will show what's still missing"
     else
         warn "no supported package manager found — install manually: ${CORE_TOOLS[*]}"

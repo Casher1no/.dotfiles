@@ -42,7 +42,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 ```
 
 `bootstrap.ps1` installs Chocolatey (if needed) and the core tools
-(`neovim git ripgrep fd nodejs-lts mingw`), links `%LOCALAPPDATA%\nvim`
+(`neovim git ripgrep fd nodejs-lts mingw llvm`), links `%LOCALAPPDATA%\nvim`
 into the repo, and runs the same `Doctor sync`. The in-editor Doctor
 installs system packages through choco on Windows and apt/dnf/pacman on
 Linux (elevated installs open in a terminal split so sudo/UAC output is

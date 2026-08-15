@@ -22,6 +22,7 @@ return {
             "html",
             "cssls",
             "somesass_ls",
+            "clangd",
             -- jdtls is started by nvim-jdtls (see plugins/jdtls.lua), not here.
         }
 

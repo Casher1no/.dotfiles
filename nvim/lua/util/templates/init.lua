@@ -20,9 +20,10 @@ local STACK_MODULES = {
     angular = "util.templates.angular",
     vue = "util.templates.vue",
     python = "util.templates.python",
+    cpp = "util.templates.cpp",
 }
 
-local ALL_STACKS = { "unity", "csharp", "laravel", "php", "angular", "vue", "python" }
+local ALL_STACKS = { "unity", "csharp", "laravel", "php", "angular", "vue", "python", "cpp" }
 
 local function collect_kinds(stack_keys, prefix_labels)
     local kinds, seen = {}, {}

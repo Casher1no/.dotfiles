@@ -82,11 +82,24 @@ return {
     priority = 1000,
     lazy = false,
     keys = {
-        { "<c-/>", function() Snacks.terminal.toggle() end, mode = { "n", "t" }, desc = "Toggle Terminal" },
-        { "<c-_>", function() Snacks.terminal.toggle() end, mode = { "n", "t" }, desc = "which_key_ignore" },
+        -- focus() not toggle(): toggle only asks "is it visible?", so pressing
+        -- this from a file window while the terminal sat open in a split just
+        -- hid it. focus() shows-and-focuses when you're elsewhere, and only
+        -- hides when the terminal is the window you're actually in.
+        { "<c-/>", function() Snacks.terminal.focus() end, mode = { "n", "t" }, desc = "Focus/close Terminal" },
+        { "<c-_>", function() Snacks.terminal.focus() end, mode = { "n", "t" }, desc = "which_key_ignore" },
     },
     opts = {
         terminal = {},
+        styles = {
+            terminal = {
+                -- snacks binds a buffer-local double-<esc> to stopinsert, which
+                -- would shadow the global t <Esc> in vim-options.lua (buffer
+                -- mappings win) — and util/terminal.lua would snap straight
+                -- back to insert anyway, so it had nothing left to do.
+                keys = { term_normal = false },
+            },
+        },
         -- Back vim.ui.select with a real picker (used by <leader>r project
         -- tasks). Without this Neovim falls back to inputlist(), whose typed
         -- digits noice's cmdline popup swallows — input works but is invisible.
