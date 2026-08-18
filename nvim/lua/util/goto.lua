@@ -1,10 +1,9 @@
--- gd (bound in plugins/lsp.lua) answers both navigation questions at once:
--- it opens one picker with the definition(s) pinned on top and every usage
--- below, so gr is never required. The definition is the first row, so <CR>
--- immediately after gd is a plain jump-to-definition; a single result with
--- no usages skips the picker entirely. Folds in the special cases first:
--- Inertia page strings in PHP, template class names → stylesheet selector,
--- and stylesheet selectors → their usages (util/styleref.lua).
+-- gd (bound in plugins/lsp.lua) is a toggle, IDE-style: on a usage it jumps
+-- straight to the definition, and pressed again on the definition itself it
+-- lists the usages (util/references.lua) instead of navigating nowhere.
+-- Folds in the special cases first: Inertia page strings in PHP, template
+-- class names → stylesheet selector, and stylesheet selectors → their usages
+-- (util/styleref.lua), each of which toggles the same way.
 local M = {}
 
 -- Client start times, for the young-server retry below. Backfilled at module
@@ -46,6 +45,37 @@ local function warming_up(bufnr)
             return client.name
         end
     end
+end
+
+local function same_file(a, b)
+    a, b = vim.fs.normalize(a), vim.fs.normalize(b)
+    if vim.fn.has("win32") == 1 then
+        a, b = a:lower(), b:lower()
+    end
+    return a == b
+end
+
+-- True when the cursor was already sitting on one of the definitions the
+-- server returned — servers answer a definition request made on a
+-- declaration with that declaration itself. That is the toggle: there is
+-- nowhere to navigate, so the useful answer is "who uses this".
+-- Exposed (like references._gather) so it can be tested headlessly.
+function M._at_definition(buf, row, locs)
+    local file = vim.api.nvim_buf_get_name(buf)
+    for _, it in ipairs(locs) do
+        local uri = it.loc.uri or it.loc.targetUri
+        -- targetSelectionRange is just the name; targetRange/range can span
+        -- the whole declaration, which is still "on the definition".
+        local range = it.loc.targetSelectionRange or it.loc.range or it.loc.targetRange
+        if uri and range
+            and same_file(vim.uri_to_fname(uri), file)
+            and row >= range.start.line
+            and row <= range["end"].line
+        then
+            return true
+        end
+    end
+    return false
 end
 
 function M.definition()
@@ -105,18 +135,20 @@ function M.definition()
                     end, RETRY_MS)
                     return
                 end
-                -- No definition anywhere (a symbol the server can't resolve,
-                -- or one that only ever appears as usages) — still show the
-                -- usages rather than reporting "no definitions".
+                -- No definition anywhere: either a symbol the server can't
+                -- resolve, or the declaration itself (some servers answer
+                -- empty there rather than pointing at themselves). Either
+                -- way the usages are the useful answer.
                 require("util.references").open()
                 return
             end
 
-            -- One picker with the definition(s) pinned on top and every usage
-            -- below it, so gd answers both questions in a single press. The
-            -- definition is the first row, so <CR> straight away is the old
-            -- jump-to-definition behaviour.
-            --
+            -- Second press, on the definition → the other half of the toggle.
+            if M._at_definition(buf, start_pos[1] - 1, locs) then
+                require("util.references").open()
+                return
+            end
+
             -- Items are built here rather than via telescope's
             -- lsp_definitions: that filters LSP results through
             -- file_ignore_patterns (vendor/, node_modules/, …), silently
@@ -127,17 +159,27 @@ function M.definition()
                 by_enc[it.enc] = by_enc[it.enc] or {}
                 table.insert(by_enc[it.enc], it.loc)
             end
-            local def_items = {}
+            -- Dedup: on files two servers both claim (vtsls + angularls in
+            -- Angular projects) the same definition comes back twice, which
+            -- would turn a plain jump into a two-row picker.
+            local def_items, seen = {}, {}
             for enc, list in pairs(by_enc) do
-                vim.list_extend(def_items, vim.lsp.util.locations_to_items(list, enc))
+                for _, item in ipairs(vim.lsp.util.locations_to_items(list, enc)) do
+                    local key = ("%s:%d:%d"):format(
+                        vim.fn.fnamemodify(item.filename, ":p"), item.lnum, item.col or 0)
+                    if not seen[key] then
+                        seen[key] = true
+                        item.is_def = true
+                        def_items[#def_items + 1] = item
+                    end
+                end
             end
-            for _, item in ipairs(def_items) do
-                item.is_def = true
-            end
-            require("util.references").open({
-                prepend = def_items,
-                title = "Definition + usages",
-                jump_if_single = true, -- nothing to choose from → just go there
+            -- One definition (the normal case) → jump. Several (interface +
+            -- implementation, overloads, a symbol two servers both claim) →
+            -- pick one.
+            require("util.references").pick(def_items, {
+                title = "Definitions",
+                jump_if_single = true,
             })
         end)
     end

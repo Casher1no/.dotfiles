@@ -1,5 +1,6 @@
 -- Custom LSP references picker, replacing telescope's lsp_references for
--- gr and gd-on-definition (util/goto.lua). Differences from stock:
+-- gr and for gd pressed on a definition (util/goto.lua). Differences from
+-- stock:
 --   - deduplicates locations when several servers answer the request
 --     (angularls + vtsls both cover .ts files and doubled every hit)
 --   - groups results: current file first, as compact "  123: code" rows,
@@ -12,32 +13,22 @@
 -- plugins/telescope.lua), so finder order is display order.
 local M = {}
 
--- Fetch, dedup and order reference items; cb(items, current_file).
+-- Fetch, dedup and order reference items; cb(items, current_file). Called
+-- with an empty list when there are none — the picker reports that case.
 -- Separate from the picker so it can be tested headlessly.
--- opts.silent: report nothing and call cb({}) instead of bailing out, for
--- callers (gd) that have definitions to show even when references are empty.
-function M._gather(cb, opts)
-    opts = opts or {}
+function M._gather(cb)
     local win = vim.api.nvim_get_current_win()
     local buf = vim.api.nvim_get_current_buf()
     local word = vim.fn.expand("<cword>")
     local is_php = vim.bo[buf].filetype == "php"
     local clients = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })
     if #clients == 0 then
-        if opts.silent then
-            cb({}, vim.api.nvim_buf_get_name(buf))
-        else
-            vim.notify("No attached LSP supports references here", vim.log.levels.WARN)
-        end
+        vim.notify("No attached LSP supports references here", vim.log.levels.WARN)
         return
     end
     local encoding = clients[1].offset_encoding or "utf-16"
 
     local function finish(items)
-        if #items == 0 and not opts.silent then
-            vim.notify("No references found", vim.log.levels.INFO)
-            return
-        end
         local current = vim.api.nvim_buf_get_name(buf)
         local here, elsewhere = {}, {}
         for _, it in ipairs(items) do
@@ -118,7 +109,7 @@ local function place_badge(prompt_bufnr, hide_tests)
 end
 
 -- References inside test folders / colocated test files, per the shared
--- classification in util/tree_tints. Pinned definitions (·def) never count:
+-- classification in util/tree_tints. Definitions (·def) never count:
 -- hiding the definition itself would be worse than showing a test row.
 local function is_test_item(item)
     if item.is_def then
@@ -127,106 +118,105 @@ local function is_test_item(item)
     return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.loop.cwd()) == "test"
 end
 
--- opts.prepend: items pinned to the top of the list (gd passes the
---   definitions, so one picker shows definition + usages together). Their
---   lines are filtered out of the reference half so nothing appears twice.
--- opts.title: picker title. opts.jump_if_single: skip the picker and jump
---   when everything collapses to one location.
+-- Show a list of locations in the picker. Shared by gr (usages) and gd
+-- (definitions, util/goto.lua) so both look and filter the same.
+-- opts.title: picker title. opts.current: the file whose hits are shown as
+--   compact "  123: code" rows (defaults to the current buffer).
+-- opts.empty: what to say when there is nothing to show.
+-- opts.jump_if_single: skip the picker and jump when there is one location.
+function M.pick(items, opts)
+    opts = opts or {}
+    local current = opts.current or vim.api.nvim_buf_get_name(0)
+    if #items == 0 then
+        vim.notify(opts.empty or "Nothing to show", vim.log.levels.INFO)
+        return
+    end
+    if opts.jump_if_single and #items == 1 then
+        local it = items[1]
+        vim.cmd("normal! m'") -- jumplist entry, so <C-o> comes back here
+        vim.cmd("edit " .. vim.fn.fnameescape(it.filename))
+        pcall(vim.api.nvim_win_set_cursor, 0, { it.lnum, math.max(0, (it.col or 1) - 1) })
+        vim.cmd("normal! zz")
+        return
+    end
+
+    local pickers = require("telescope.pickers")
+    local finders = require("telescope.finders")
+    local conf = require("telescope.config").values
+
+    local function entry_maker(item)
+        local in_current = vim.fn.fnamemodify(item.filename, ":p") == current
+        local text = vim.trim(item.text or "")
+        -- ·grep = found by text search, not confirmed by the LSP
+        -- (util/grepref.lua) — could be a same-named method elsewhere.
+        -- ·def = a definition, from the gd picker.
+        local suffix = item.is_def and "  ·def" or (item.via_grep and "  ·grep" or "")
+        local display
+        if in_current and not item.is_def then
+            display = ("  %4d: %s%s"):format(item.lnum, text, suffix)
+        else
+            display = ("%s:%d: %s%s"):format(vim.fn.fnamemodify(item.filename, ":."), item.lnum, text, suffix)
+        end
+        return {
+            value = item,
+            display = display,
+            ordinal = display,
+            filename = item.filename,
+            lnum = item.lnum,
+            col = item.col,
+        }
+    end
+
+    -- hide_tests drops usages in test folders/files (<C-t> toggles it,
+    -- like the filter buttons on an IDE usages panel). The full
+    -- item list stays in this closure, so toggling just rebuilds the
+    -- picker from it with the typed query kept.
+    local function show(hide_tests, text)
+        local shown = items
+        if hide_tests then
+            shown = vim.tbl_filter(function(it)
+                return not is_test_item(it)
+            end, items)
+        end
+        pickers
+            .new({}, {
+                -- Never censor LSP results with the search-noise ignore
+                -- patterns: a reference inside vendor/node_modules is still
+                -- a reference (telescope filters picker entries through
+                -- file_ignore_patterns by default).
+                file_ignore_patterns = {},
+                prompt_title = (opts.title or "References — current file first")
+                    .. (hide_tests and " — tests hidden" or ""),
+                default_text = text,
+                finder = finders.new_table({ results = shown, entry_maker = entry_maker }),
+                sorter = conf.generic_sorter({}),
+                previewer = conf.qflist_previewer({}),
+                attach_mappings = function(prompt_bufnr, map)
+                    place_badge(prompt_bufnr, hide_tests)
+                    map({ "i", "n" }, "<C-t>", function()
+                        local line = require("telescope.actions.state").get_current_line()
+                        require("telescope.actions").close(prompt_bufnr)
+                        show(not hide_tests, line)
+                    end, { desc = "Toggle hide tests" })
+                    return true
+                end,
+            })
+            :find()
+    end
+    show(false)
+end
+
+-- gr, and gd pressed on the definition itself: every usage of the symbol
+-- under the cursor, current file first.
 function M.open(opts)
     opts = opts or {}
-    local prepend = opts.prepend or {}
     M._gather(function(refs, current)
-        local function key(item)
-            return vim.fn.fnamemodify(item.filename, ":p") .. ":" .. item.lnum
-        end
-        local items, seen = {}, {}
-        for _, it in ipairs(prepend) do
-            seen[key(it)] = true
-            items[#items + 1] = it
-        end
-        for _, it in ipairs(refs) do
-            if not seen[key(it)] then
-                seen[key(it)] = true
-                items[#items + 1] = it
-            end
-        end
-        if #items == 0 then
-            vim.notify("No definition or references found", vim.log.levels.INFO)
-            return
-        end
-        if opts.jump_if_single and #items == 1 then
-            local it = items[1]
-            vim.cmd("edit " .. vim.fn.fnameescape(it.filename))
-            pcall(vim.api.nvim_win_set_cursor, 0, { it.lnum, math.max(0, (it.col or 1) - 1) })
-            vim.cmd("normal! zz")
-            return
-        end
-
-        local pickers = require("telescope.pickers")
-        local finders = require("telescope.finders")
-        local conf = require("telescope.config").values
-
-        local function entry_maker(item)
-            local in_current = vim.fn.fnamemodify(item.filename, ":p") == current
-            local text = vim.trim(item.text or "")
-            -- ·grep = found by text search, not confirmed by the LSP
-            -- (util/grepref.lua) — could be a same-named method elsewhere.
-            -- ·def = the definition itself, pinned at the top by gd.
-            local suffix = item.is_def and "  ·def" or (item.via_grep and "  ·grep" or "")
-            local display
-            if in_current and not item.is_def then
-                display = ("  %4d: %s%s"):format(item.lnum, text, suffix)
-            else
-                display = ("%s:%d: %s%s"):format(vim.fn.fnamemodify(item.filename, ":."), item.lnum, text, suffix)
-            end
-            return {
-                value = item,
-                display = display,
-                ordinal = display,
-                filename = item.filename,
-                lnum = item.lnum,
-                col = item.col,
-            }
-        end
-
-        -- hide_tests drops usages in test folders/files (<C-t> toggles it,
-        -- like the filter buttons on an IDE usages panel). The full
-        -- item list stays in this closure, so toggling just rebuilds the
-        -- picker from it with the typed query kept.
-        local function show(hide_tests, text)
-            local shown = items
-            if hide_tests then
-                shown = vim.tbl_filter(function(it)
-                    return not is_test_item(it)
-                end, items)
-            end
-            pickers
-                .new({}, {
-                    -- Never censor LSP results with the search-noise ignore
-                    -- patterns: a reference inside vendor/node_modules is still
-                    -- a reference (telescope filters picker entries through
-                    -- file_ignore_patterns by default).
-                    file_ignore_patterns = {},
-                    prompt_title = (opts.title or "References — current file first")
-                        .. (hide_tests and " — tests hidden" or ""),
-                    default_text = text,
-                    finder = finders.new_table({ results = shown, entry_maker = entry_maker }),
-                    sorter = conf.generic_sorter({}),
-                    previewer = conf.qflist_previewer({}),
-                    attach_mappings = function(prompt_bufnr, map)
-                        place_badge(prompt_bufnr, hide_tests)
-                        map({ "i", "n" }, "<C-t>", function()
-                            local line = require("telescope.actions.state").get_current_line()
-                            require("telescope.actions").close(prompt_bufnr)
-                            show(not hide_tests, line)
-                        end, { desc = "Toggle hide tests" })
-                        return true
-                    end,
-                })
-                :find()
-        end
-        show(false)
-    end, { silent = #prepend > 0 })
+        M.pick(refs, {
+            current = current,
+            title = opts.title,
+            empty = "No usages found",
+        })
+    end)
 end
 
 return M
