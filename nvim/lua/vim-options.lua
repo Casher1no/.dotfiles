@@ -82,7 +82,8 @@ vim.keymap.set({ "n", "x" }, "√", "<C-v>", { desc = "Visual block selection" }
 -- Neovide composes Option by default; this makes it send <A-...> instead.
 vim.g.neovide_input_macos_option_key_is_meta = "both"
 -- Typing on all selected lines at once (live, multi-cursor style) is wired
--- up in plugins/multicursor.lua: block-select with Alt+V, then i/a.
+-- up in plugins/multicursor.lua: stack carets with Ctrl+Alt+Up/Down, or
+-- block-select with Alt+V and then press i/a.
 
 -- Pasting over a visual selection normally yanks the replaced text into the
 -- unnamed register, clobbering what you copied. Visual-mode P pastes without

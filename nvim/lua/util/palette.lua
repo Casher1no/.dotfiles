@@ -302,6 +302,20 @@ M.categories = {
         },
     },
     {
+        name = "Multiple Cursors",
+        icon = "",
+        -- multicursor.nvim (see plugins/multicursor.lua). Several carets edit
+        -- at once and every keystroke lands on all of them live, unlike vim's
+        -- built-in block insert which only replays the edit on Esc.
+        items = {
+            { desc = "Add cursor above (multicursor / multi-caret)", keys = "<C-A-Up>" },
+            { desc = "Add cursor below (hold to add more)", keys = "<C-A-Down>" },
+            { desc = "Then type on every cursor at once", keys = "i / a / c / o, then type" },
+            { desc = "Column select, then one cursor per line", keys = "<A-v>, grow with j/k, then i / a" },
+            { desc = "Stop editing, then drop the extra cursors", keys = "<Esc>, <Esc>" },
+        },
+    },
+    {
         name = "Git",
         icon = "",
         items = {
