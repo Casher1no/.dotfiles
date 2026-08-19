@@ -217,3 +217,21 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_user_command("CppRun", function()
 	require("util.cpp").run()
 end, { desc = "Compile the current C/C++ file and run it" })
+
+-- Modifier keywords in keyword-purple, IDE-style. jdtls (and other servers)
+-- report `private`, `static`, `final`, `public` — and in Java even `class` —
+-- as the semantic token `modifier`, which nvim links to @type.qualifier, i.e.
+-- the type color (yellow in one dark). Semantic tokens outrank treesitter, so
+-- those words came out yellow even though treesitter already captured them as
+-- @keyword.modifier. Point the token back at that capture. The `.java`-style
+-- per-filetype variants inherit it through the @-group fallback, and the
+-- ColorScheme hook re-applies it because a theme swap clears the link.
+local semantic_group = vim.api.nvim_create_augroup("semantic_token_colors", { clear = true })
+local function link_semantic_tokens()
+	vim.api.nvim_set_hl(0, "@lsp.type.modifier", { link = "@keyword.modifier" })
+end
+link_semantic_tokens()
+vim.api.nvim_create_autocmd("ColorScheme", {
+	group = semantic_group,
+	callback = link_semantic_tokens,
+})
