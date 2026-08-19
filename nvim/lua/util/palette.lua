@@ -320,6 +320,8 @@ M.categories = {
         icon = "",
         items = {
             { desc = "Changed files + diff", keys = "<leader>gs", cmd = "Telescope git_status" },
+            { desc = "File history (<CR> diffs it against the file now, <C-g> copies the hash)", keys = "<leader>gh" },
+            { desc = "History of the selected lines", keys = "<leader>gh (visual)" },
             { desc = "Next hunk", keys = "]h" },
             { desc = "Previous hunk", keys = "[h" },
             { desc = "Preview hunk", keys = "<leader>hp" },

@@ -53,6 +53,11 @@ return {
         { "<leader>fw", "<cmd>Telescope grep_string<cr>", desc = "Search word under cursor" },
         -- Changed/added/removed files with a diff preview underneath.
         { "<leader>gs", "<cmd>Telescope git_status<cr>", desc = "Git changes (status + diff)" },
+        -- File history, IDE-style: commits that touched this file, each one
+        -- previewed as code with red/green lines (util/git_history.lua).
+        -- <CR> opens that revision in a diff against the working copy.
+        { "<leader>gh", function() require("util.git_history").open() end, desc = "File history (commits touching this file)" },
+        { "<leader>gh", function() require("util.git_history").open_range() end, mode = "x", desc = "History of the selected lines" },
     },
     opts = function()
         -- Row tints matching the explorer: results in test folders get the

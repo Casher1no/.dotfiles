@@ -29,6 +29,13 @@ vim.api.nvim_create_autocmd("BufEnter", {
 	end,
 })
 
+-- The events above are all user-driven, and CursorHold fires only once per
+-- idle period (nvim won't repeat it until a key is pressed), so a file
+-- rewritten while you sit still — an AI agent editing in the background, a
+-- branch switch — stays stale on screen. util/file_watch.lua polls each open
+-- file directly and reloads it about a second after the write.
+require("util.file_watch").setup()
+
 -- Keep focused terminals in terminal mode, and make finished ones dismissible
 -- instead of frozen — see util/terminal.lua for why both halves are needed.
 require("util.terminal").setup()
@@ -42,7 +49,10 @@ require("util.lsp_refresh").setup()
 -- Auto-save: write modified, named, real-file buffers at natural pause points
 -- (leaving insert, switching buffer/window, losing focus, idle) so external
 -- tools never collide with unsaved edits. Skipped on every keystroke on purpose
--- so Unity doesn't recompile mid-typing.
+-- so Unity doesn't recompile mid-typing. CursorHoldI covers a pause *inside*
+-- insert mode ('updatetime', 4s) — without it a long typing session never
+-- reaches disk, and anything reading the file meanwhile (an AI agent, a
+-- formatter, a test run) works from stale contents.
 local function autosave(buf)
 	buf = buf or vim.api.nvim_get_current_buf()
 	if not vim.api.nvim_buf_is_valid(buf) then
@@ -54,12 +64,18 @@ local function autosave(buf)
 	if not vim.bo[buf].modified or vim.api.nvim_buf_get_name(buf) == "" then
 		return -- nothing to write, or [No Name]
 	end
+	if require("util.file_watch").conflicted(buf) then
+		-- Something else rewrote this file while these edits were unsaved.
+		-- Writing now would drop that change on the floor with no prompt —
+		-- file_watch has already said so; leave the choice to :w! or :e!.
+		return
+	end
 	vim.api.nvim_buf_call(buf, function()
 		vim.cmd("silent! lockmarks update") -- `update` writes only if modified
 	end)
 end
 
-vim.api.nvim_create_autocmd({ "InsertLeave", "BufLeave", "FocusLost", "CursorHold" }, {
+vim.api.nvim_create_autocmd({ "InsertLeave", "BufLeave", "FocusLost", "CursorHold", "CursorHoldI" }, {
 	group = vim.api.nvim_create_augroup("auto_save", { clear = true }),
 	callback = function(args)
 		autosave(args.buf)
