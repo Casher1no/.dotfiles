@@ -174,6 +174,19 @@ function M.record(name, cmd)
     write_history(data)
 end
 
+-- Drop one entry from this project's history (the runner's `d`).
+function M.forget(index)
+    local data = read_history()
+    local key = M.key()
+    if data[key] then
+        table.remove(data[key], index)
+        if #data[key] == 0 then
+            data[key] = nil
+        end
+        write_history(data)
+    end
+end
+
 -- auto_close=false: snacks otherwise closes the window the moment the command
 -- exits 0, so anything a short run printed is gone before you can read it.
 -- util/terminal.lua turns the finished terminal into one you dismiss with
@@ -239,48 +252,11 @@ function M.remove_interactive(on_done)
     end)
 end
 
--- Pick a saved task and run it. Saved tasks first, then the recent runs under
--- a "History" divider — those are already expanded, so picking one re-runs it
--- verbatim instead of asking for its `{}` values again.
+-- Pick a saved task and run it: two stacked windows, saved commands above
+-- and recent runs below (util/tasks_ui.lua). Kept as a thin delegate so
+-- <leader>rr and anything else calling this keep working.
 function M.run_interactive()
-    local list = M.list()
-    local recent = M.history()
-    if #list == 0 and #recent == 0 then
-        vim.notify("No tasks for this project — add one via the palette", vim.log.levels.WARN)
-        return
-    end
-
-    local entries = {}
-    for _, t in ipairs(list) do
-        entries[#entries + 1] = { kind = "task", task = t }
-    end
-    if #recent > 0 then
-        entries[#entries + 1] = { kind = "divider" }
-        for _, e in ipairs(recent) do
-            entries[#entries + 1] = { kind = "recent", task = e }
-        end
-    end
-
-    vim.ui.select(entries, {
-        prompt = "Run task:",
-        format_item = function(entry)
-            if entry.kind == "divider" then
-                return "───────────────  History  ───────────────"
-            end
-            return entry.task.name .. "  —  " .. entry.task.cmd
-        end,
-    }, function(choice)
-        -- vim.ui.select has no notion of an unselectable row, so the divider
-        -- is a real item that simply does nothing when picked.
-        if not choice or choice.kind == "divider" then
-            return
-        end
-        if choice.kind == "recent" then
-            M.run_recent(choice.task)
-        else
-            M.run(choice.task)
-        end
-    end)
+    require("util.tasks_ui").open()
 end
 
 return M
