@@ -155,13 +155,13 @@ local function cs_is_property_declaration(before)
 end
 
 local function cs_allman_open_brace()
-	local ok_pairs, MiniPairs = pcall(require, "mini.pairs")
 	local function default_open()
-		if ok_pairs then
-			vim.api.nvim_feedkeys(MiniPairs.open("{}", "^[^\\]"), "n", true)
-		else
-			vim.api.nvim_feedkeys("{", "n", true)
-		end
+		-- Balance-aware `{` from util/pairs.lua, the same one the global
+		-- insert mapping uses; a bare `{` if that is somehow unavailable.
+		local ok, keys = pcall(function()
+			return require("util.pairs").open("{")
+		end)
+		vim.api.nvim_feedkeys(ok and keys or "{", "n", true)
 	end
 
 	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
