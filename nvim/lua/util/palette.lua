@@ -234,17 +234,17 @@ M.categories = {
             { desc = "Find files", keys = "<C-p> / <leader>ff", cmd = "Telescope find_files" },
             { desc = "Live grep", keys = "<leader>fg", cmd = "Telescope live_grep" },
             {
-                desc = "Find files (tests hidden)",
+                desc = "Find files (with tests)",
                 keys = "<leader>fF",
                 action = function()
-                    require("util.telescope_case").find_files_no_tests()
+                    require("util.telescope_case").find_files_with_tests()
                 end,
             },
             {
-                desc = "Live grep (tests hidden)",
+                desc = "Live grep (with tests)",
                 keys = "<leader>fG",
                 action = function()
-                    require("util.telescope_case").live_grep_no_tests()
+                    require("util.telescope_case").live_grep_with_tests()
                 end,
             },
             { desc = "Toggle hide tests (in picker / references)", keys = "<C-t>" },

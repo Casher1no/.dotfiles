@@ -1,7 +1,7 @@
 -- Match-case state badge for / and ? search, right-aligned in the noice
 -- cmdline popup — same look as the Telescope one in util/telescope_case.lua:
--- a dim "Aa ⟨C-s⟩" hint while case-insensitive, a highlighted "Aa ✓" while
--- the pattern starts with \C. The <C-s> toggle itself is mapped in
+-- a dim "Aa ⟨C-s⟩" hint while case-insensitive, the same hint highlighted
+-- while the pattern starts with \C. The <C-s> toggle itself is mapped in
 -- vim-options.lua and calls M.toggle().
 local M = {}
 
@@ -35,8 +35,8 @@ local function place()
     local sensitive = vim.fn.getcmdline():sub(1, 2) == [[\C]]
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, 0, {
-        virt_text = sensitive and { { " Aa ✓ ", "DiagnosticOk" } }
-            or { { " Aa ⟨C-s⟩ ", "Comment" } },
+        -- Same label in both states, only the highlight changes.
+        virt_text = { { " Aa ⟨C-s⟩ ", sensitive and "DiagnosticOk" or "Comment" } },
         virt_text_pos = "right_align",
     })
     -- noice rewrites this buffer on every render, wiping the extmark —

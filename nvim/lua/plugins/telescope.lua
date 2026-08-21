@@ -36,16 +36,17 @@ return {
     cmd = "Telescope", -- also load when invoked as :Telescope (e.g. from the dashboard)
     keys = {
         -- IDE-style: <C-p> for files, double-shift feel via <leader>ff
-        { "<C-p>", "<cmd>Telescope find_files<cr>", desc = "Find files" },
+        { "<C-p>", function() require("util.telescope_case").find_files() end, desc = "Find files" },
         -- ff/fg go through util/telescope_case.lua: always case-insensitive
-        -- on open; <C-s> in the prompt toggles match case for that search
-        -- only — see the Aa badge on the right of the prompt.
+        -- and with tests filtered out on open; <C-s> / <C-t> in the prompt
+        -- toggle match case and the test filter for that search only — see
+        -- the badges on the right of the prompt.
         { "<leader>ff", function() require("util.telescope_case").find_files() end, desc = "Find files" },
         { "<leader>fg", function() require("util.telescope_case").live_grep() end, desc = "Live grep (search in files)" },
-        -- Capital variants start with tests hidden; <C-t> in the prompt
+        -- Capital variants start with tests included; <C-t> in the prompt
         -- flips the filter either way.
-        { "<leader>fF", function() require("util.telescope_case").find_files_no_tests() end, desc = "Find files (tests hidden)" },
-        { "<leader>fG", function() require("util.telescope_case").live_grep_no_tests() end, desc = "Live grep (tests hidden)" },
+        { "<leader>fF", function() require("util.telescope_case").find_files_with_tests() end, desc = "Find files (with tests)" },
+        { "<leader>fG", function() require("util.telescope_case").live_grep_with_tests() end, desc = "Live grep (with tests)" },
         { "<leader>fb", "<cmd>Telescope buffers<cr>", desc = "Open buffers" },
         { "<leader>fr", "<cmd>Telescope oldfiles<cr>", desc = "Recent files (all)" },
         { "<leader>fp", project_recent_files, desc = "Recent files (this project, max 12)" },
@@ -69,7 +70,10 @@ return {
         -- Also skip dependency/package folders: in projects without git,
         -- rg/fd have no .gitignore to respect, so vendor and node_modules
         -- would otherwise flood every search.
-        local file_ignore_patterns = { "%.meta$" }
+        -- .git/ too: find_files runs with hidden = true (dotfiles are often
+        -- what's being looked for), which otherwise drags in every hook
+        -- sample and object file under .git.
+        local file_ignore_patterns = { "%.meta$", "^%.git/", "/%.git/" }
         for _, dir in ipairs({ "node_modules", "vendor", "%.venv", "venv", "__pycache__" }) do
             vim.list_extend(file_ignore_patterns, { "^" .. dir .. "/", "/" .. dir .. "/" })
         end

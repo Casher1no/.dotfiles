@@ -101,8 +101,8 @@ local function place_badge(prompt_bufnr, hide_tests)
             return
         end
         vim.api.nvim_buf_set_extmark(prompt_bufnr, badge_ns, 0, 0, {
-            virt_text = hide_tests and { { " tests ✗ ", "DiagnosticWarn" } }
-                or { { " tests ⟨C-t⟩ ", "Comment" } },
+            -- Same label in both states, only the highlight changes.
+            virt_text = { { " tests ⟨C-t⟩ ", hide_tests and "DiagnosticWarn" or "Comment" } },
             virt_text_pos = "right_align",
         })
     end)

@@ -2,15 +2,19 @@
 -- keymaps in plugins/telescope.lua). Pickers always open case-insensitive —
 -- Telescope's default live_grep is --smart-case, so one capital letter used
 -- to silently make the search case-sensitive. A badge on the right side of
--- the prompt shows the state: a dim "Aa ⟨C-s⟩" hint while insensitive, a
--- highlighted "Aa ✓" while match case is on. <C-s> flips it for the current
--- picker only: the typed query is kept, and the next picker starts
--- insensitive again.
+-- the prompt shows the state: the "Aa ⟨C-s⟩" hint stays put and only its
+-- color changes, so the prompt never reflows as you toggle. <C-s> flips it
+-- for the current picker only: the typed query is kept, and the next picker
+-- starts insensitive again.
 --
--- Same pattern for hiding tests: <C-t> flips a "tests" filter that drops
--- results in test folders and colocated test files (classification shared
--- with the explorer via util/tree_tints). <leader>fF / <leader>fG open with
--- the filter already on.
+-- Same pattern for hiding tests: <C-t> flips a "tests ⟨C-t⟩" filter that
+-- drops results in test folders and colocated test files (classification
+-- shared with the explorer via util/tree_tints). Pickers open with the
+-- filter already on; <leader>fF / <leader>fG open with tests included.
+--
+-- Both pickers rank their results by file relevance (util/search_rank):
+-- source files in the project's own languages first, config/data and docs
+-- below them, generated output last.
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("telescope_case_badge")
@@ -23,9 +27,10 @@ local function place_badge(prompt_bufnr, state)
         if not vim.api.nvim_buf_is_valid(prompt_bufnr) then
             return
         end
+        -- Same label in both states, only the highlight changes.
         local virt = {
-            state.no_tests and { " tests ✗ ", "DiagnosticWarn" } or { " tests ⟨C-t⟩ ", "Comment" },
-            state.sensitive and { " Aa ✓ ", "DiagnosticOk" } or { " Aa ⟨C-s⟩ ", "Comment" },
+            { " tests ⟨C-t⟩ ", state.no_tests and "DiagnosticWarn" or "Comment" },
+            { " Aa ⟨C-s⟩ ", state.sensitive and "DiagnosticOk" or "Comment" },
         }
         vim.api.nvim_buf_set_extmark(prompt_bufnr, ns, 0, 0, {
             virt_text = virt,
@@ -162,10 +167,13 @@ local function launch(name, state, text)
         -- (plugins/telescope.lua), so extend a copy of those.
         local defaults = require("telescope.config").values.file_ignore_patterns or {}
         opts.file_ignore_patterns = vim.list_extend(vim.deepcopy(defaults), M.test_ignore_patterns())
-        opts.prompt_title = (name == "live_grep" and "Live Grep" or "Find Files") .. " — tests hidden"
     end
 
+    -- Both sorters rank results by file relevance (util/search_rank): code
+    -- above templates above json/markdown above generated files.
+    local rank = require("util.search_rank")
     if name == "live_grep" then
+        opts.sorter = rank.grep_sorter()
         -- live_grep respawns rg on every keystroke; debounce so fast typing
         -- doesn't fork a process per character. find_files stays undebounced —
         -- its per-keystroke filter is in-memory and instant feel matters more.
@@ -173,27 +181,29 @@ local function launch(name, state, text)
         -- Explicit flag either way, otherwise rg falls back to --smart-case
         -- from the default vimgrep_arguments.
         opts.additional_args = { state.sensitive and "--case-sensitive" or "--ignore-case" }
-    elseif state.sensitive then
-        opts.sorter = sensitive_file_sorter()
+    else
+        opts.sorter = rank.file_sorter(state.sensitive and sensitive_file_sorter() or nil)
     end
 
     require("telescope.builtin")[name](opts)
 end
 
+-- Tests are filtered out by default; <C-t> (or the *_with_tests variants)
+-- brings them back.
 function M.find_files()
-    launch("find_files", {})
-end
-
-function M.live_grep()
-    launch("live_grep", {})
-end
-
-function M.find_files_no_tests()
     launch("find_files", { no_tests = true })
 end
 
-function M.live_grep_no_tests()
+function M.live_grep()
     launch("live_grep", { no_tests = true })
+end
+
+function M.find_files_with_tests()
+    launch("find_files", {})
+end
+
+function M.live_grep_with_tests()
+    launch("live_grep", {})
 end
 
 return M
