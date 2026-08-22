@@ -33,9 +33,6 @@ M.categories = {
                         keys = "ctrl-f",
                         project = name, -- used by the `f` toggle in M.open
                         action = function()
-                            -- Avoid landing in a no-neck-pain padding window
-                            -- when centered view is on (see util.projects).
-                            require("util.projects").focus_content_window()
                             vim.cmd("cd " .. vim.fn.fnameescape(path))
                             require("telescope.builtin").find_files({ cwd = path })
                         end,

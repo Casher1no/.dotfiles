@@ -66,6 +66,11 @@ return {
     },
     opts = {
         close_if_last_window = true,
+        -- Defaults plus centered_pad: without it neo-tree picks the centered
+        -- view's left margin (util/centered.lua) as the window to open a file
+        -- in — <CR> on a file appeared to do nothing, because the file opened
+        -- out in the margin.
+        open_files_do_not_replace_types = { "terminal", "Trouble", "qf", "edgy", "centered_pad" },
         enable_git_status = true,
         enable_diagnostics = true,
         event_handlers = {
@@ -156,7 +161,7 @@ return {
         },
         window = {
             position = "right",
-            width = 35,
+            width = 40, -- columns
             mappings = {
                 ["<esc>"] = "focus_previous_window",
                 ["<cr>"] = "toggle_or_recursive_collapse",

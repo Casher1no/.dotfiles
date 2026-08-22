@@ -16,7 +16,9 @@ vim.opt.inccommand = "split"
 
 vim.opt.number = true
 vim.opt.signcolumn = "yes:1"
-vim.opt.colorcolumn = "120"
+-- Right-margin ruler at column 120, drawn as a thin line rather than the
+-- filled cell 'colorcolumn' produces (util/ruler.lua).
+require("util.ruler").setup(120)
 
 -- What persistence.nvim stores in a session (buffers, layout, cwd, …)
 vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
@@ -177,6 +179,14 @@ vim.keymap.set("c", "<C-s>", function()
     require("util.search_case").toggle()
 end, { desc = "Toggle match case (search)" })
 require("util.search_case").setup()
+
+-- Centered view for wide monitors: pads the gutter so the code column sits
+-- in the middle of the window, without opening the empty side windows the
+-- usual plugins for this use (util/centered.lua). State survives restarts.
+vim.keymap.set("n", "<leader>zz", function()
+    require("util.centered").toggle()
+end, { desc = "Toggle centered view" })
+require("util.centered").setup()
 
 -- Esc also closes an open K popup (docs/error, see util/hover.lua) and
 -- clears search highlight
