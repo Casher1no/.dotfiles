@@ -438,6 +438,17 @@ M.categories = {
             { desc = "Scroll popup sideways", keys = "<S-Left> / <S-Right>" },
             { desc = "Code action", keys = "<leader>ca" },
             { desc = "Rename symbol", keys = "F2 / <leader>rn" },
+            {
+                desc = "Fix C# namespaces to match folders (file / folder)",
+                keys = "<leader>ca, or F in the explorer",
+                action = function()
+                    require("util.cs_namespace_ui").refactor_path(vim.api.nvim_buf_get_name(0))
+                end,
+            },
+            {
+                desc = "Set this Unity project's root namespace",
+                cmd = "UnityNamespaceRoot",
+            },
         },
     },
     {

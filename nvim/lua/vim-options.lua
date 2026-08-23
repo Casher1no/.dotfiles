@@ -29,6 +29,15 @@ vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,term
 vim.opt.undofile = true
 vim.opt.undolevels = 10000
 
+-- No swap files. They exist to recover unsaved work after a crash, but the
+-- auto-save in config/autocmds.lua already keeps every buffer on disk and
+-- 'undofile' above persists the history — so a leftover .swp has nothing the
+-- real file doesn't, and only ever shows up as the blocking ATTENTION prompt
+-- ("[O]pen Read-Only, (E)dit anyway, (R)ecover...") when a crash or a second
+-- nvim left one behind. Off means reopening a file just shows the newest
+-- contents, the way an IDE does.
+vim.opt.swapfile = false
+
 vim.g.mapleader = " "
 
 -- Quitting with unsaved buffers asks "Save changes?" (IDE close dialog)

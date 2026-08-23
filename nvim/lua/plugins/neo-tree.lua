@@ -158,6 +158,16 @@ return {
                     require("neo-tree.sources.manager").refresh(state.name)
                 end)
             end,
+            -- Fix C# namespaces to match the folder layout, for the file or the
+            -- whole folder under the cursor — util/cs_namespace_ui.lua shows
+            -- every edit (including the references it has to update) before
+            -- anything is written.
+            refactor_namespace = function(state)
+                local node = state.tree:get_node()
+                if node then
+                    require("util.cs_namespace_ui").refactor_path(node.path)
+                end
+            end,
         },
         window = {
             position = "right",
@@ -182,6 +192,7 @@ return {
                 ["R"] = "refresh",
                 ["H"] = "toggle_hidden",
                 ["O"] = "open_in_finder",
+                ["F"] = "refactor_namespace",
             },
         },
         filesystem = {

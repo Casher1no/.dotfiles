@@ -1,33 +1,18 @@
--- Unity C# templates. Namespace is derived from the path segment after
--- "Scripts" (Assets/Scripts/Features/Items/Components/Foo.cs ->
--- Inheritance.Features.Items.Components), matching every namespace already
--- in this project (see CLAUDE.md / ARCHITECTURE.md).
+-- Unity C# templates. The namespace a new file gets is the same one
+-- util/cs_namespace.lua holds every existing file to: the project's root
+-- namespace (Unity's own m_ProjectGenerationRootNamespace) plus the folders
+-- below Assets/Scripts, so Assets/Scripts/Features/Items/Components/Foo.cs
+-- lands in Inheritance.Features.Items.Components. Sharing the resolver means a
+-- file created here can never be one the "Fix namespace" intention then
+-- objects to.
 
 local M = {}
 M.LABEL = "Unity"
 
 local function namespace_for(path)
-    local normalized = path:gsub("\\", "/")
-    local segments = {}
-    for segment in normalized:gmatch("[^/]+") do
-        segments[#segments + 1] = segment
-    end
-
-    local scripts_index = nil
-    for i, segment in ipairs(segments) do
-        if segment == "Scripts" then
-            scripts_index = i
-        end
-    end
-    if not scripts_index then
-        return "Inheritance"
-    end
-
-    local ns_segments = { "Inheritance" }
-    for i = scripts_index + 1, #segments - 1 do
-        ns_segments[#ns_segments + 1] = segments[i]
-    end
-    return table.concat(ns_segments, ".")
+    -- Falls back to the folder name for a project that declares no root
+    -- namespace anywhere; the intention prompts for the real one on first use.
+    return require("util.cs_namespace").expected(path) or vim.fn.fnamemodify(path, ":h:t")
 end
 
 M.KINDS = {

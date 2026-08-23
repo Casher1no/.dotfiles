@@ -46,6 +46,10 @@ require("util.terminal").setup()
 -- the servers and auto-heals unresolved references. :LspRefresh forces it.
 require("util.lsp_refresh").setup()
 
+-- :UnityNamespace / :UnityNamespaceRoot — the C# namespace refactor also
+-- reachable from <leader>ca and F in the explorer.
+require("util.cs_namespace_ui").setup()
+
 -- Auto-save: write modified, named, real-file buffers at natural pause points
 -- (leaving insert, switching buffer/window, losing focus, idle) so external
 -- tools never collide with unsaved edits. Skipped on every keystroke on purpose

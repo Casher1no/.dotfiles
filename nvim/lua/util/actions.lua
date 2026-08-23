@@ -364,11 +364,24 @@ function M._entries(cb)
     if not sel then
         vim.list_extend(extras, treesj_entries(bufnr))
     end
+    -- Non-LSP entries that belong *inside* a group rather than in the bottom
+    -- section: they carry rank/group_label and sort in among the server's own
+    -- actions (util/cs_namespace_ui.lua's "Fix namespace →  …" joins Fix).
+    local ranked = sel and {} or require("util.cs_namespace_ui").entries(bufnr)
     local lnum = vim.api.nvim_win_get_cursor(win)[1] - 1
 
     local clients = vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/codeAction" })
     if #clients == 0 then
-        return cb(extras, bufnr)
+        if #ranked == 0 then
+            return cb(extras, bufnr)
+        end
+        local only = { { header = ranked[1].group_label } }
+        vim.list_extend(only, ranked)
+        if #extras > 0 then
+            only[#only + 1] = { sep = true }
+            vim.list_extend(only, extras)
+        end
+        return cb(only, bufnr)
     end
 
     -- kept per client (offset encodings differ) for exec_cmd's context
@@ -412,6 +425,19 @@ function M._entries(cb)
                 end,
             }
             ::continue::
+        end
+        -- order -1 keeps these ahead of the server's actions within their
+        -- group: a namespace that disagrees with its folder is the thing you
+        -- opened the menu for.
+        for _, e in ipairs(ranked) do
+            collected[#collected + 1] = {
+                label = e.label,
+                rank = e.rank,
+                group_label = e.group_label,
+                preferred = 0,
+                order = -1,
+                run = e.run,
+            }
         end
         table.sort(collected, function(a, b)
             if a.rank ~= b.rank then
