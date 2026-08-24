@@ -20,6 +20,9 @@ vim.opt.signcolumn = "yes:1"
 -- filled cell 'colorcolumn' produces (util/ruler.lua).
 require("util.ruler").setup(120)
 
+-- `this` as a keyword, readonly fields in the field colour (util/syntax.lua).
+require("util.syntax").setup()
+
 -- What persistence.nvim stores in a session (buffers, layout, cwd, …)
 vim.opt.sessionoptions = "buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
 
