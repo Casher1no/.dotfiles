@@ -65,6 +65,11 @@ return {
         -- green background, package folders the gray one (util/telescope_tints).
         require("util.telescope_tints")
 
+        -- Preview title = the previewed file's name, in the top-left corner
+        -- (util/telescope_preview_title.lua); dynamic_preview_title below
+        -- is what feeds it a per-entry title in the first place.
+        require("util.telescope_preview_title").setup()
+
         -- Hide Unity's .meta sidecar files from every picker (find_files,
         -- live_grep, grep_string, …). Lua patterns, matched against the path.
         -- Also skip dependency/package folders: in projects without git,
@@ -109,6 +114,10 @@ return {
                     timeout = 250, -- ms
                 },
                 path_display = { "truncate" },
+                -- Retitle the preview window per entry instead of a static
+                -- "Grep Preview"/"File Preview" — util/telescope_preview_title
+                -- trims that title to the file name and pins it top-left.
+                dynamic_preview_title = true,
                 file_ignore_patterns = file_ignore_patterns,
                 mappings = {
                     i = {
