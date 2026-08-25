@@ -51,7 +51,7 @@ local function popup_win()
 end
 
 -- Scroll the open K popup without focusing it. Both return true when a
--- popup was scrolled — used by the smart <S-arrows> in plugins/neoscroll.lua,
+-- popup was scrolled — used by the smart <S-arrows> in lua/vim-options.lua,
 -- which fall back to their normal behavior otherwise.
 function M.scroll(lines)
     local win = popup_win()

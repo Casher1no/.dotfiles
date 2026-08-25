@@ -344,8 +344,8 @@ M.categories = {
             { desc = "Focus next window", keys = "<leader>nb", cmd = "wincmd w" },
             { desc = "Focus previous window", keys = "<leader>pb", cmd = "wincmd W" },
             { desc = "Toggle centered view", keys = "<leader>zz" },
-            { desc = "Smooth scroll up half page", keys = "<S-Up>" },
-            { desc = "Smooth scroll down half page", keys = "<S-Down>" },
+            { desc = "Jump 45 lines up", keys = "<S-Up>" },
+            { desc = "Jump 45 lines down", keys = "<S-Down>" },
         },
     },
     {

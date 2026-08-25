@@ -9,8 +9,8 @@ return {
     dependencies = {
         "MunifTanjim/nui.nvim",
     },
-    -- Docs-float scrolling lives on <S-Up>/<S-Down> in plugins/neoscroll.lua,
-    -- which prefers an open K popup and falls back to smooth code scrolling.
+    -- Docs-float scrolling lives on <S-Up>/<S-Down> in lua/vim-options.lua,
+    -- which prefers an open K popup and falls back to a 45-line cursor jump.
     opts = {
         cmdline = {
             enabled = true,

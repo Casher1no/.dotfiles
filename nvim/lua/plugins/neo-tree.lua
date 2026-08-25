@@ -136,16 +136,21 @@ return {
             focus_previous_window = function()
                 vim.cmd("wincmd p")
             end,
-            -- Reveal the file (or open the folder) in Finder.
-            open_in_finder = function(state)
+            -- Reveal the file in the OS file manager (Explorer / Finder /
+            -- whatever the desktop provides), or open the folder for a
+            -- directory node. Was macOS-only (`open -R`) until util/os_files
+            -- grew the Windows and Linux arms.
+            open_in_file_manager = function(state)
                 local node = state.tree:get_node()
                 if not node then
                     return
                 end
                 if node.type == "directory" then
                     vim.ui.open(node.path)
-                else
-                    vim.system({ "open", "-R", node.path })
+                elseif not require("util.os_files").reveal(node.path) then
+                    -- Nothing on this desktop can highlight the file itself;
+                    -- settle for opening the folder that contains it.
+                    vim.ui.open(vim.fs.dirname(node.path))
                 end
             end,
             -- Create a new file from a template. Offers only the templates
@@ -171,7 +176,10 @@ return {
         },
         window = {
             position = "right",
-            width = 40, -- columns
+            -- Columns, not pixels — Neovim sizes windows in cells. 46 is 40
+            -- plus ~50px at a typical ~8-9px monospace cell width; adjust the
+            -- number directly if your font makes that come out wrong.
+            width = 46,
             mappings = {
                 ["<esc>"] = "focus_previous_window",
                 ["<cr>"] = "toggle_or_recursive_collapse",
@@ -191,7 +199,7 @@ return {
                 ["p"] = "paste_from_clipboard",
                 ["R"] = "refresh",
                 ["H"] = "toggle_hidden",
-                ["O"] = "open_in_finder",
+                ["O"] = "open_in_file_manager",
                 ["F"] = "refactor_namespace",
             },
         },
@@ -252,9 +260,10 @@ return {
         -- Mouse must be on for clicking the tree
         vim.opt.mouse = "a"
 
-        -- Dropping a file from Finder onto the explorer arrives as a pasted
-        -- (shell-escaped) path in iTerm2. Intercept pastes in the neo-tree
-        -- buffer and copy those files into the folder under the cursor.
+        -- Dropping a file from the OS file manager onto the explorer arrives
+        -- as a pasted (shell-escaped) path in iTerm2, Windows Terminal and
+        -- WezTerm alike. Intercept pastes in the neo-tree buffer and copy
+        -- those files into the folder under the cursor.
         local orig_paste = vim.paste
         local drop_chunks = {}
         vim.paste = function(lines, phase)
@@ -296,15 +305,15 @@ return {
 
             local copied = 0
             for _, src in ipairs(paths) do
-                local dst = dir .. "/" .. vim.fn.fnamemodify(src, ":t")
+                local dst = vim.fs.joinpath(dir, vim.fn.fnamemodify(src, ":t"))
                 if vim.uv.fs_stat(dst) then
                     vim.notify("Already exists: " .. dst, vim.log.levels.WARN)
                 else
-                    local res = vim.system({ "cp", "-R", src, dst }):wait()
-                    if res.code == 0 then
+                    local ok, err = require("util.os_files").copy(src, dst)
+                    if ok then
                         copied = copied + 1
                     else
-                        vim.notify("Copy failed: " .. (res.stderr or src), vim.log.levels.ERROR)
+                        vim.notify("Copy failed: " .. (err or src), vim.log.levels.ERROR)
                     end
                 end
             end

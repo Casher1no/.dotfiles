@@ -71,10 +71,6 @@
     "branch": "v3.x",
     "commit": "ebd66767191714e008ce73b769518a763ff31bdc"
   },
-  "neoscroll.nvim": {
-    "branch": "master",
-    "commit": "c8d29979cb0cb3a2437a8e0ae683fd82f340d3b8"
-  },
   "noice.nvim": {
     "branch": "main",
     "commit": "7bfd942445fb63089b59f97ca487d605e715f155"

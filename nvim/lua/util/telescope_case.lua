@@ -172,6 +172,10 @@ local function launch(name, state, text)
     -- Both sorters rank results by file relevance (util/search_rank): code
     -- above templates above json/markdown above generated files.
     local rank = require("util.search_rank")
+    -- Resolve the project's languages here rather than from inside the scoring
+    -- loop, and do it per launch rather than once at plugin load so a :cd into
+    -- another project is picked up. Cached per cwd, so repeat launches are free.
+    rank.prime()
     if name == "live_grep" then
         opts.sorter = rank.grep_sorter()
         -- live_grep respawns rg on every keystroke; debounce so fast typing

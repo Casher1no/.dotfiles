@@ -9,11 +9,30 @@
 -- The tree also opens asynchronously and the layout it lands in is rebuilt a
 -- tick later, which can drop focus back on the code window — so on the first
 -- <leader>e the tree appeared unfocused. Re-assert focus once it has settled.
+
+local is_win = vim.fn.has("win32") == 1
+
+-- Canonical form for comparing two paths. On Windows this matters twice over:
+-- neo-tree normalizes its own paths to BACKslashes (neo-tree.utils
+-- normalize_path) and so does nvim_buf_get_name, so a containment test written
+-- with "/" separators answers false for every file in the project — which is
+-- exactly what used to happen here, leaving reveal off on every <leader>e.
+-- Drive-letter/segment case can differ between the two sources as well, and
+-- NTFS does not care, so fold it.
+local function canon(path)
+    if type(path) ~= "string" or path == "" then
+        return ""
+    end
+    path = vim.fs.normalize(path) -- "\\" -> "/", resolves . and ..
+    path = path:gsub("/+$", "") -- no trailing separator
+    return is_win and path:lower() or path
+end
+
 local function inside(path, root)
-    if path == "" or root == nil or root == "" then
+    path, root = canon(path), canon(root)
+    if path == "" or root == "" then
         return false
     end
-    root = root:gsub("/$", "")
     return path == root or vim.startswith(path, root .. "/")
 end
 

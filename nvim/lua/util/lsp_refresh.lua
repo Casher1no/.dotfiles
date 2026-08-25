@@ -26,46 +26,42 @@ local HEAL_COOLDOWN_MS = 30000 -- min time between heals of the same file/client
 local snapshots = {} -- root -> { relpath -> mtime }
 local scanning = {} -- root -> true while a scan is in flight
 local last_scan = {} -- root -> uv.now() of last started scan
-local scan_output = {} -- root -> raw stdout of the last scan
 local healed = {} -- client_id .. ":" .. uri -> uv.now() of last heal
 local attempts = {} -- client_id .. ":" .. kind .. ":" .. name -> uv.now() of last lookup
 
 -- ---------------------------------------------------------------- watch bridge
 
--- List tracked + untracked (non-ignored) files with mtimes, async.
--- Output lines: "<mtime> <path relative to root>".
--- stat's flags differ per libc: BSD/mac wants -f '%m %N', GNU/linux -c
--- '%Y %n'. Windows has neither sh nor xargs nor stat — the watch bridge is
--- disabled there (FocusGained heal and diagnostics healing still work).
-local sysname = (vim.uv or vim.loop).os_uname().sysname
-local IS_WINDOWS = sysname:find("Windows") ~= nil
-local STAT = sysname == "Darwin" and "stat -f '%m %N'" or "stat -c '%Y %n'"
+-- List tracked + untracked (non-ignored) files with their mtimes, async.
+--
+-- git is the only external tool involved, and it is a core dependency on all
+-- three platforms (both bootstrap scripts install it). This used to pipe git
+-- through `xargs stat` inside `sh -c`, which needs sh, xargs and stat — none
+-- of which exist on Windows, so the entire watch bridge was silently dead
+-- there. libuv stats the files instead: same code, same behaviour, every OS.
+--
+-- The stat loop is the one part that runs on the main loop. Measured at ~24ms
+-- for ~1700 files, and it runs at most once per SCAN_GAP_MS per root, so it
+-- stays well under a frame's worth of work at the rate this actually fires.
 local function scan_root(root, cb)
-    if IS_WINDOWS then
-        return cb(nil)
-    end
-    vim.system({
-        "sh",
-        "-c",
-        "git ls-files -co --exclude-standard -z 2>/dev/null | xargs -0 " .. STAT .. " 2>/dev/null",
-    }, { cwd = root, text = true }, function(out)
-        local stdout = out.stdout or ""
-        -- Byte-identical output means identical paths and mtimes, so the
-        -- parse and the snapshot diff would be pure waste.
-        if scan_output[root] == stdout then
-            cb(nil)
-            return
-        end
-        scan_output[root] = stdout
-        local snap = {}
-        for line in stdout:gmatch("[^\n]+") do
-            local mtime, path = line:match("^(%d+) (.+)$")
-            if mtime then
-                snap[path] = mtime
+    vim.system(
+        { "git", "ls-files", "-co", "--exclude-standard", "-z" },
+        { cwd = root, text = true },
+        function(out)
+            if out.code ~= 0 then
+                return cb(nil) -- not a git repo, or git unavailable
             end
+            local snap = {}
+            for rel in (out.stdout or ""):gmatch("[^%z]+") do
+                -- Forward slashes from git join fine on Windows too, and
+                -- keeping git's own spelling makes the snapshot keys stable.
+                local st = uv.fs_stat(root .. "/" .. rel)
+                if st then
+                    snap[rel] = st.mtime.sec .. "." .. st.mtime.nsec
+                end
+            end
+            cb(snap)
         end
-        cb(snap)
-    end)
+    )
 end
 
 local function notify_clients(root, changes)
@@ -101,6 +97,13 @@ local function diff_and_notify(root, snap)
     end
 end
 
+-- Absolute on every platform: "/..." on unix, "F:\..." or "F:/..." on
+-- Windows. The old test was `root:sub(1, 1) == "/"`, which is false for every
+-- Windows path — so no root ever qualified and the bridge never ran there.
+local function is_absolute(path)
+    return path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil
+end
+
 local function refresh(force, gap)
     local roots = {}
     for _, client in ipairs(vim.lsp.get_clients()) do
@@ -108,14 +111,13 @@ local function refresh(force, gap)
         -- Absolute existing dirs only: a client started with a cwd-relative
         -- root would make vim.system resolve it against nvim's current cwd
         -- and blow up with ENOENT once the cwd moves.
-        if root and root:sub(1, 1) == "/" and uv.fs_stat(root) then
+        if root and is_absolute(root) and uv.fs_stat(root) then
             roots[root] = true
         end
     end
-    -- Drop caches for roots whose last client is gone — the raw stdout cache
-    -- alone can hold megabytes per large project, and project-hopping in one
-    -- session would otherwise accumulate them forever.
-    for _, cache in ipairs({ scan_output, snapshots, last_scan }) do
+    -- Drop caches for roots whose last client is gone, so project-hopping in
+    -- one session doesn't accumulate snapshots forever.
+    for _, cache in ipairs({ snapshots, last_scan }) do
         for root in pairs(cache) do
             if not roots[root] and not scanning[root] then
                 cache[root] = nil

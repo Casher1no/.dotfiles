@@ -122,6 +122,52 @@ vim.keymap.set("n", "<A-k>", ":m .-2<CR>==", { desc = "Move current line up" })
 vim.keymap.set("n", "<A-Down>", ":m .+1<CR>==", { desc = "Move current line down" })
 vim.keymap.set("n", "<A-Up>", ":m .-2<CR>==", { desc = "Move current line up" })
 
+-- Shift+Up/Down: move the CURSOR 45 lines, instantly. Not a scroll — the
+-- cursor lands on the new line and the view follows it, keeping 'scrolloff'
+-- lines of context. These used to run neoscroll's animated ctrl_u/ctrl_d,
+-- which crawled through its easing animation on Windows terminals and on macOS
+-- moved the viewport without taking the cursor with it.
+--
+-- The count is clamped to the buffer: a bare `45j` with fewer than 45 lines
+-- left beeps and moves nothing at all, which made the key feel dead near the
+-- end of a file.
+--
+-- An open K popup (docs or error float) still wins and scrolls its own
+-- contents instead, leaving the code where it is — see util/hover.lua.
+local JUMP_LINES = 45
+
+local function line_jump(dir) -- 1 = down, -1 = up
+	return function()
+		if require("util.hover").scroll(dir * 4) then
+			return
+		end
+		local cur, last = vim.fn.line("."), vim.fn.line("$")
+		local target = dir > 0 and math.min(cur + JUMP_LINES, last) or math.max(cur - JUMP_LINES, 1)
+		local count = math.abs(target - cur)
+		if count > 0 then
+			-- feedkeys rather than nvim_win_set_cursor: j/k carry the desired
+			-- column across short lines, and in visual mode the selection
+			-- extends to the new cursor position instead of being dropped.
+			vim.api.nvim_feedkeys(count .. (dir > 0 and "j" or "k"), "n", false)
+		end
+	end
+end
+
+-- Sideways, same idea: scroll an open popup, otherwise the default word motion.
+local function popup_hscroll(dir) -- 1 = right, -1 = left
+	return function()
+		if require("util.hover").hscroll(dir * 8) then
+			return
+		end
+		vim.cmd("normal! " .. (dir > 0 and "w" or "b"))
+	end
+end
+
+vim.keymap.set({ "n", "v", "x" }, "<S-Up>", line_jump(-1), { desc = "Jump 45 lines up" })
+vim.keymap.set({ "n", "v", "x" }, "<S-Down>", line_jump(1), { desc = "Jump 45 lines down" })
+vim.keymap.set({ "n", "v", "x" }, "<S-Left>", popup_hscroll(-1), { desc = "Scroll popup left / word back" })
+vim.keymap.set({ "n", "v", "x" }, "<S-Right>", popup_hscroll(1), { desc = "Scroll popup right / word forward" })
+
 vim.keymap.set("n", "<C-z>", "u", { desc = "Undo last action" })
 vim.keymap.set("i", "<C-z>", "<C-o>u", { desc = "Undo last action in insert mode" })
 

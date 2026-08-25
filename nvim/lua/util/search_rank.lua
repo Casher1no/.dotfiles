@@ -136,6 +136,26 @@ local marker_langs = {
 
 local cache = { cwd = nil, langs = {} }
 
+-- .NET has no fixed marker file name, only the *.sln / *.csproj pattern — and
+-- a Unity project has neither at a predictable place. Everything here stays
+-- inside the root directory: this runs behind M.penalty, i.e. once per entry
+-- per keystroke, so it must never walk the tree. A recursive glob for
+-- **/*.csproj used to live here and froze the picker for ~20s on the first
+-- open of a Unity project (Library/ alone is ~44k files, and vim.fn.glob is
+-- synchronous on the main loop with no ignore rules).
+local function is_dotnet(cwd)
+    -- .slnx is the current VS solution format; plain .sln is still the common
+    -- one. Both are a single non-recursive readdir.
+    for _, pat in ipairs({ "/*.sln", "/*.slnx", "/*.csproj", "/*.fsproj" }) do
+        if vim.fn.glob(cwd .. pat, true, true)[1] then
+            return true
+        end
+    end
+    -- Unity generates its .csproj files on demand, so a freshly cloned project
+    -- can have none at all. Two stats settle it (util/unity.lua).
+    return require("util.unity").is_unity_project(cwd)
+end
+
 -- Extensions belonging to the project's own languages, cached per cwd.
 function M.project_langs(cwd)
     cwd = cwd or vim.loop.cwd() or ""
@@ -150,17 +170,24 @@ function M.project_langs(cwd)
             end
         end
     end
-    -- .NET has no fixed marker file name, only the *.sln / *.csproj pattern.
-    if vim.fn.glob(cwd .. "/*.sln") ~= "" or vim.fn.glob(cwd .. "/**/*.csproj", false, true)[1] then
+    if is_dotnet(cwd) then
         langs.cs = true
     end
     cache.cwd, cache.langs = cwd, langs
     return langs
 end
 
+-- Fill the cache ahead of the first scoring pass. The pickers call this from
+-- their opts/launch path so M.penalty only ever reads an already-warm table —
+-- detection is cheap now, but it still has no business running inside the
+-- per-entry sorter loop.
+function M.prime(cwd)
+    M.project_langs(cwd or vim.loop.cwd() or "")
+end
+
 -- Class of a path: "source" / "markup" / "config" / "doc" / "asset" /
 -- "generated". Exposed for headless tests.
-function M.classify(path)
+local function classify_path(path)
     local name = path:match("[^/\\]+$") or path
     local lower = name:lower()
     for _, pattern in ipairs(GENERATED_NAMES) do
@@ -193,6 +220,28 @@ function M.classify(path)
         return "config"
     end
     return EXT[ext] or "config"
+end
+
+-- classify_path is ~9 pattern matches plus a walk over every path segment, and
+-- the sorter re-runs it for every entry on every keystroke over a result set
+-- that does not change while a picker is open — so each distinct path is
+-- classified once and remembered. Capped rather than unbounded: a long session
+-- hopping projects would otherwise hold every path it ever scored.
+local MEMO_MAX = 20000
+local memo, memo_n = {}, 0
+
+function M.classify(path)
+    local hit = memo[path]
+    if hit then
+        return hit
+    end
+    local class = classify_path(path)
+    if memo_n >= MEMO_MAX then
+        memo, memo_n = {}, 0
+    end
+    memo[path] = class
+    memo_n = memo_n + 1
+    return class
 end
 
 -- Score multiplier for a path. 1.0 = untouched, higher = further down.

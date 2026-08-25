@@ -59,7 +59,12 @@ return {
                     csharp_enable_inlay_hints_for_implicit_variable_types = true,
                 },
                 ["csharp|code_lens"] = {
-                    dotnet_enable_references_code_lens = true,
+                    -- Off on purpose. Reference counts are recomputed for every
+                    -- symbol in the buffer as you type, and on a Unity solution
+                    -- (Assembly-CSharp plus a dozen package assemblies) that is
+                    -- a steady source of input lag. Flip to true if the counts
+                    -- are worth it on a smaller solution.
+                    dotnet_enable_references_code_lens = false,
                 },
             },
         })
