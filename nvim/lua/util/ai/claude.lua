@@ -10,7 +10,9 @@ local function term_opts()
     cwd = cwd or vim.fn.getcwd()
     return {
         cwd = cwd,
-        win = { position = "left", width = 0.35 },
+        -- Columns, not a fraction of the screen: 0.35 of a 400-column
+        -- terminal was a 150-column pane. 68 is ~550px at this font.
+        win = { position = "left", width = 68 },
         interactive = true,
     }
 end

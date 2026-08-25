@@ -10,8 +10,8 @@
 -- What the padding windows don't do is behave like ordinary splits:
 --   * their buffers are unlisted scratch buffers — invisible to :ls, to the
 --     buffer picker and to saved sessions;
---   * focus can never land in one: entering bounces straight back to the
---     code, so <C-w>h/l and mouse clicks act as if they weren't there;
+--   * focus can never land in one: entering carries straight on the way it
+--     was going, so <C-w>h/l and mouse clicks act as if they weren't there;
 --   * they carry the filetype "centered_pad", which plugins that go looking
 --     for a window to open a file in are told to skip (see the
 --     open_files_do_not_replace_types list in plugins/neo-tree.lua);
@@ -246,15 +246,49 @@ local function refresh()
     end)
 end
 
--- Focus never rests in the padding: send it back where it came from.
+-- Focus never rests in the padding: it carries on the way it was going, so a
+-- pad is passed through rather than bounced off. Direction matters — sending
+-- focus back where it came from strands you on whichever side you started:
+-- <C-w>l out of a left-hand terminal, or <C-w>h out of the explorer, would
+-- step into the padding and be handed straight back. Only when there is
+-- nothing beyond the pad does focus return to where it came from.
+local bouncing = false
+
 local function bounce()
-    if not is_pad(vim.api.nvim_get_current_win()) then
+    -- The wincmd below lands in another window, firing WinEnter again.
+    if bouncing or not is_pad(vim.api.nvim_get_current_win()) then
         return
     end
+    local pad = vim.api.nvim_get_current_win()
     local previous = vim.fn.win_getid(vim.fn.winnr("#"))
-    local target = (valid(previous) and not is_pad(previous)) and previous or content_wins(0)[1]
-    if valid(target) then
-        vim.api.nvim_set_current_win(target)
+    -- Coming from the left means heading right, and vice versa. Anything
+    -- else (a mouse click, a plugin focusing the pad) counts as heading
+    -- inward, towards the code.
+    local dir = "l"
+    if valid(previous) and not is_pad(previous) and vim.fn.win_screenpos(previous)[2] > vim.fn.win_screenpos(pad)[2] then
+        dir = "h"
+    end
+
+    bouncing = true
+    local ok, err = pcall(function()
+        -- Several pads can sit side by side once a split is thrown in.
+        while is_pad(vim.api.nvim_get_current_win()) do
+            local from = vim.api.nvim_get_current_win()
+            vim.cmd("wincmd " .. dir)
+            if vim.api.nvim_get_current_win() == from then
+                break -- edge of the screen
+            end
+        end
+        if is_pad(vim.api.nvim_get_current_win()) then
+            local target = (valid(previous) and not is_pad(previous)) and previous or content_wins(0)[1]
+            if valid(target) then
+                vim.api.nvim_set_current_win(target)
+            end
+        end
+    end)
+    bouncing = false
+    if not ok then
+        vim.notify("Centered view: " .. tostring(err), vim.log.levels.WARN)
     end
 end
 
