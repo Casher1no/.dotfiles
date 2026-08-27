@@ -47,3 +47,47 @@ into the repo, and runs the same `Doctor sync`. The in-editor Doctor
 installs system packages through choco on Windows and apt/dnf/pacman on
 Linux (elevated installs open in a terminal split so sudo/UAC output is
 visible).
+
+## Unity as an external editor (Windows)
+
+Double-clicking a script in Unity can open it in Neovim at the right line.
+This is **entirely a Unity setting** — nothing in this repo, no launcher
+script. In Unity: **Edit → Preferences → External Tools → External Script
+Editor → Browse…**. Picking an executable Unity doesn't recognise makes it
+show an **External Script Editor Args** field, which substitutes
+`$(File)`, `$(Line)`, `$(Column)` and `$(ProjectPath)`.
+
+Point it at Windows Terminal:
+
+| Field | Value |
+| --- | --- |
+| External Script Editor | `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps\wt.exe` |
+| External Script Editor Args | `-d "$(ProjectPath)" nvim "+$(Line)" "$(File)"` |
+
+Or keep `powershell.exe` as the editor and let it call through:
+
+```
+-NoProfile -WindowStyle Hidden -Command "wt -d '$(ProjectPath)' nvim '+$(Line)' '$(File)'"
+```
+
+Neovim needs a real console, which is why the target is a terminal rather
+than `nvim.exe` — pointed straight at `nvim.exe` it gets no TTY and exits
+immediately.
+
+Notes:
+
+- Set this in the Preferences UI, not the registry. Unity caches the values
+  (`kScriptsDefaultApp` / `kScriptEditorArgs` under
+  `HKCU:\Software\Unity Technologies\Unity Editor 5.x`) and rewrites them on
+  exit, so a registry edit made while the Editor is running is lost.
+- `/c` is **cmd.exe** syntax, not PowerShell. `powershell.exe /c script.bat`
+  silently does nothing.
+- Every double-click starts a **new** Neovim. Reusing an instance you already
+  have open needs `nvim --server <address> --remote-expr`, and the address has
+  to be predictable — Neovim's default (`\\.\pipe\nvim.<pid>.0`) is not — so
+  that would need config on the Neovim side, not just this setting.
+- Unity only regenerates `Assembly-CSharp.csproj` when an IDE package
+  (`com.unity.ide.rider` / `.visualstudio`) recognises the selected editor.
+  With a custom one it may stop, which leaves Roslyn blind to new scripts —
+  `:Usync` (see `nvim/lua/util/unity_sync.lua`) rewrites the `<Compile>` list
+  from disk when that happens.

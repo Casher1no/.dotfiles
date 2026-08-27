@@ -83,6 +83,34 @@ return {
                     require("util.tree_tints").register(state)
                 end,
             },
+            -- Unity's csproj lists every script explicitly, so a file created,
+            -- deleted or moved from the tree has to be written into
+            -- Assembly-CSharp.csproj or Roslyn will not see it. util/unity_sync
+            -- no-ops outside a Unity project; see plugins/unity.lua.
+            {
+                event = "file_added",
+                handler = function(path)
+                    require("util.unity_sync").on_added(path)
+                end,
+            },
+            {
+                event = "file_deleted",
+                handler = function(path)
+                    require("util.unity_sync").on_deleted(path)
+                end,
+            },
+            {
+                event = "file_renamed",
+                handler = function(args)
+                    require("util.unity_sync").on_renamed(args.source, args.destination)
+                end,
+            },
+            {
+                event = "file_moved",
+                handler = function(args)
+                    require("util.unity_sync").on_renamed(args.source, args.destination)
+                end,
+            },
         },
         default_component_configs = {
             icon = {

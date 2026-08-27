@@ -39,6 +39,15 @@ Rules that follow:
 - **Case-fold before comparing on Windows.** NTFS is case-insensitive, so
   `F:\Projects` and `f:\projects` are the same directory and must compare
   equal. `util/mru.lua` and `util/focus_tree.lua` both do this.
+- **Normalising is for comparing, not for writing.** When you write a path
+  *into a file another tool owns*, echo back the separator that file already
+  uses rather than the one `vim.fs.normalize` gave you. Unity's
+  `Assembly-CSharp.csproj` lists `Assets\Scripts\Foo.cs` on Windows; writing
+  `Assets/Scripts/Foo.cs` alongside it means the duplicate check never
+  matches and the file ends up listed twice (the SDK then fails with
+  NETSDK1022). `util/unity_sync.lua` detects the separator per file
+  (`_detect_sep`) and the line ending too (`_detect_nl`) — a CRLF file
+  spliced with `\n` shows up in git as rewritten end to end.
 
 `util/focus_tree.lua` has the canonical helper — copy that shape:
 
@@ -113,7 +122,16 @@ For anything touching paths, the filesystem, or an external process:
    other platforms' branches for real — see
    `reveal_cmd` and the `load_as()` harness pattern. That beats reasoning,
    and it beats copying the logic into the test, which only ever tests the
-   copy.
+   copy. Where a module reads `vim.fn.has("win32")` once at load time,
+   `load_as()` is just: clear `package.loaded`, swap `vim.fn` for a table
+   whose `has` lies, `require` the real file, put `vim.fn` back.
+
+   Beware plugin lifecycles when testing through one. `require("neo-tree")`
+   does *not* run neo-tree's setup — its `setup()` only stashes the config,
+   and `opts.event_handlers` are not subscribed until the tree is first
+   used. Firing `neo-tree.events` at it before then silently reaches
+   nobody, which reads as a broken handler. Drive it the way a user would
+   (`:Neotree close` is enough) before asserting.
 3. **Test multiple scenarios, not the happy path.** For this codebase that
    means at minimum: both separator styles, mixed case, names with spaces
    and non-ASCII, a path outside the project root, a sibling directory whose
