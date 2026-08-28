@@ -43,9 +43,17 @@ vim.opt.swapfile = false
 
 vim.g.mapleader = " "
 
--- Quitting with unsaved buffers asks "Save changes?" (IDE close dialog)
--- instead of failing with E37/E162 — refactors from the actions menu edit
--- buffers without writing them, so this comes up after invert/extract too.
+-- An IDE never asks whether to save on the way out, so neither does this.
+-- autowriteall writes a modified buffer whenever it is about to be left
+-- behind: :edit, :enew, :quit, :qall, :exit, closing a window. It does NOT
+-- cover :bdelete/:bwipeout, and it stops to ask about a file that changed on
+-- disk underneath you — util/autosave.lua closes both of those gaps, and does
+-- the pause-point saving while you work.
+vim.o.autowriteall = true
+
+-- Backstop for what still can't be written automatically: a [No Name] buffer
+-- with text in it has no filename to save to, so quitting asks "Save
+-- changes?" (IDE close dialog) rather than failing with E37/E162.
 vim.o.confirm = true
 
 -- Save file with Ctrl+S

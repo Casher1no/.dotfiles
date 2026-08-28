@@ -33,9 +33,11 @@ local function stop(buf)
 end
 
 -- True while this buffer has unsaved edits *and* its file has moved
--- underneath — the one case nothing here can resolve on its own. The autosave
--- in config/autocmds.lua asks before writing, so a background write never gets
--- silently overwritten by an idle save.
+-- underneath — the one case nothing here can resolve on its own. Neovim does
+-- not merge; both versions just stay alive until you pick one. util/autosave
+-- skips a conflicted buffer at its pause points, so a background write never
+-- gets silently overwritten by an idle save — but it does force-write on the
+-- way out, where there is no "leave it for later" left. See there.
 function M.conflicted(buf)
     local w = watchers[buf]
     return w ~= nil and w.conflict == true

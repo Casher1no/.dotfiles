@@ -151,6 +151,17 @@ For anything touching paths, the filesystem, or an external process:
    closed, gap discovered — it goes in here, not just in a commit message.
    The section below is only useful if it is true.
 
+## Traps that already bit us
+
+Not platform-specific, but the same shape of problem: an API that accepts
+what you give it and then quietly does something else.
+
+- **`'autowriteall'` does not cover `:bdelete`/`:bwipeout`,** despite covering
+  every other way of leaving a buffer behind, and it stops to ask about a file
+  that changed on disk. `util/autosave.lua` covers both — `CmdlineLeave` for
+  the former (Neovim checks the buffer itself, before any autocommand of its
+  own would run) and `update!` for the latter.
+
 ## Known cross-platform gaps
 
 None currently open. Last swept after the `util/os_files.lua` change; the
