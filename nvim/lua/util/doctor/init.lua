@@ -417,6 +417,34 @@ local function shell_job(desc, cmd)
     }
 end
 
+-- For dependencies whose install is neither a package manager nor one
+-- command: the entry supplies a function taking (log, done) and calls done
+-- when it has finished, however many steps that took. util/deps_lsp.lua's
+-- download → verify → unpack chain is the reason this kind exists.
+local function fn_job(desc, fn)
+    return {
+        desc = desc,
+        run = function(next_job)
+            local finished = false
+            local function done()
+                -- The installer is a chain of vim.system callbacks; a bug on
+                -- one arm calling done twice would run the rest of the queue
+                -- twice with it.
+                if finished then
+                    return
+                end
+                finished = true
+                vim.schedule(next_job)
+            end
+            local ok, err = pcall(fn, log, done)
+            if not ok then
+                log("FAILED: " .. desc .. " — " .. tostring(err))
+                done()
+            end
+        end,
+    }
+end
+
 local function mason_job(names, want_update)
     return {
         desc = (want_update and "mason update: " or "mason install: ") .. table.concat(names, ", "),
@@ -606,6 +634,11 @@ local function build_install_jobs(want_update, include_optional)
                 mason_pkgs[#mason_pkgs + 1] = ins.mason
             elseif ins.cmd and not want_update then
                 jobs[#jobs + 1] = shell_job(table.concat(ins.cmd, " "), ins.cmd)
+            elseif ins.fn then
+                -- No want_update guard: the installer fetches the pinned
+                -- version, which is the upgrade path too (an "outdated" row
+                -- here means the pin moved, not that a registry did).
+                jobs[#jobs + 1] = fn_job("install " .. entry.name, ins.fn)
             elseif ins.restore_plugins and not want_update then
                 jobs[#jobs + 1] = restore_job()
             elseif ins.treesitter and not want_update then

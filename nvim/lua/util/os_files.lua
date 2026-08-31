@@ -121,4 +121,49 @@ function M.copy(src, dst)
     return true
 end
 
+-- Recursive delete through libuv, for the same reason M.copy exists: there is
+-- no portable command. neo-tree's own delete shells out to `rm -Rf` on unix
+-- and `cmd.exe /c rmdir /s /q` on Windows — two code paths, one of which is
+-- the unguarded unix binary this repo keeps finding. One libuv walk covers
+-- all three.
+--
+-- Reads the directory in 64-entry batches like M.copy: fs_readdir returns at
+-- most the chunk size it was opened with, so a single call silently stops at
+-- 64 children and leaves the 65th behind — which then makes fs_rmdir fail
+-- with ENOTEMPTY rather than anything that names the real cause.
+---@return boolean ok, string? err
+function M.remove_tree(path)
+    -- lstat: a symlink is unlinked, never followed into whatever it points at.
+    local st = uv.fs_lstat(path)
+    if not st then
+        return false, path .. ": not found"
+    end
+    if st.type ~= "directory" then
+        local ok, err = uv.fs_unlink(path)
+        return ok == true, err
+    end
+
+    local dir, oerr = uv.fs_opendir(path, nil, 64)
+    if not dir then
+        return false, oerr or (path .. ": cannot read")
+    end
+    while true do
+        local entries = uv.fs_readdir(dir)
+        if not entries or #entries == 0 then
+            break
+        end
+        for _, e in ipairs(entries) do
+            local ok, err = M.remove_tree(vim.fs.joinpath(path, e.name))
+            if not ok then
+                uv.fs_closedir(dir)
+                return false, err
+            end
+        end
+    end
+    uv.fs_closedir(dir)
+
+    local ok, err = uv.fs_rmdir(path)
+    return ok == true, err
+end
+
 return M

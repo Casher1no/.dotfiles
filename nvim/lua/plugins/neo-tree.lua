@@ -93,6 +93,37 @@ return {
                     require("util.unity_sync").on_added(path)
                 end,
             },
+            -- Deleting from the tree is otherwise permanent (neo-tree
+            -- unlinks, or shells out to rm -Rf), so `d` on the wrong row
+            -- could not be taken back. Move it to the trash instead and let
+            -- `u` restore it — see util/file_trash.lua.
+            --
+            -- { handled = true } is what makes neo-tree skip its own delete;
+            -- it still calls complete(), so file_deleted below still fires
+            -- and unity_sync still updates the csproj. Falling through on
+            -- failure is deliberate: a delete the user asked for should still
+            -- happen if the trash is unwritable, just without the safety net.
+            {
+                event = "before_file_delete",
+                handler = function(path)
+                    local ok, err = require("util.file_trash").stash(path)
+                    if not ok then
+                        vim.notify("Could not move to trash (" .. tostring(err)
+                            .. ") — deleting permanently", vim.log.levels.WARN)
+                        return
+                    end
+                    -- neo-tree wipes the buffer of a deleted file itself, but
+                    -- only on the path we just took over.
+                    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                        if vim.api.nvim_buf_is_valid(buf)
+                            and vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) == vim.fs.normalize(path)
+                        then
+                            pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                        end
+                    end
+                    return { handled = true }
+                end,
+            },
             {
                 event = "file_deleted",
                 handler = function(path)
@@ -140,6 +171,19 @@ return {
             },
         },
         commands = {
+            -- Puts back whatever the last `d` deleted. Fires file_added so
+            -- unity_sync writes the script back into the csproj it was just
+            -- removed from.
+            trash_undo = function(state)
+                local ok, result = require("util.file_trash").undo()
+                if not ok then
+                    vim.notify("Undo delete: " .. result, vim.log.levels.WARN)
+                    return
+                end
+                require("neo-tree.events").fire_event("file_added", result)
+                vim.notify("Restored " .. vim.fn.fnamemodify(result, ":t"))
+                require("neo-tree.sources.manager").refresh(state.name)
+            end,
             -- Open files / expand folders, but when collapsing an already-expanded
             -- folder, recursively collapse everything inside it too. That way the
             -- next time you expand it, its child folders start collapsed.
@@ -220,7 +264,10 @@ return {
                 ["P"] = { "toggle_preview", config = { use_float = true } },
                 ["a"] = "add",
                 ["A"] = "add_template",
-                ["d"] = "delete",
+                ["d"] = "delete", -- to the trash, not permanent: see trash_undo
+                ["u"] = "trash_undo",
+                -- the same key that undoes everywhere else in this config
+                ["<C-z>"] = "trash_undo",
                 ["r"] = "rename",
                 ["y"] = "copy_to_clipboard",
                 ["x"] = "cut_to_clipboard",

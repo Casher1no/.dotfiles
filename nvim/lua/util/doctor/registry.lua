@@ -22,8 +22,9 @@
 --              apt (+ optional dnf/pacman overrides when names differ,
 --              apt name is the linux fallback), plus the OS-agnostic
 --              { cmd = {...} } | { mason = "pkg" } | { restore_plugins } |
---              { treesitter }. Absent key for the running OS = Doctor can
---              only report it there.
+--              { treesitter } | { fn = function(log, done) ... } for a
+--              multi-step installer of its own. Absent key for the running
+--              OS = Doctor can only report it there.
 local M = {}
 
 -- Root of the dotfiles nvim config (this file lives at
@@ -198,6 +199,18 @@ M.entries = {
         check = { bin = "clangd" },
         version = { cmd = { "clangd", "--version" } },
         install = { brew = "llvm", choco = "llvm", apt = "clangd", dnf = "clang-tools-extra", pacman = "clang" },
+    },
+    {
+        id = "deps-lsp", name = "deps-lsp (dependency versions)", group = "Language runtimes", optional = true,
+        needed_for = "latest-version hints and update code actions in package.json / composer.json / … (lua/lsp/deps_lsp.lua)",
+        -- No mason package and no brew/choco/apt formula, so it installs
+        -- from its own GitHub release: util/deps_lsp.lua picks the archive
+        -- for this (OS, arch), verifies the published sha256 and unpacks it
+        -- into stdpath("data")/deps-lsp. status() covers the version check
+        -- too — a separate `version` key would freeze the binary's path at
+        -- registry-load time, before the install that creates it.
+        check = { fn = function() return require("util.deps_lsp").status() end },
+        install = { fn = function(log, done) return require("util.deps_lsp").install(log, done) end },
     },
 
     -- ── Editor layer ───────────────────────────────────────────────────

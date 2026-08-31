@@ -5,6 +5,12 @@
 --     (angularls + vtsls both cover .ts files and doubled every hit)
 --   - groups results: current file first, as compact "  123: code" rows,
 --     then other files as "path:123: code"
+--   - hides hits inside dependency folders (node_modules, vendor, .venv, …)
+--     behind a <C-l> toggle, the way an IDE hides library results: on a
+--     method that implements a library interface the library's own
+--     declarations bury your code
+--   - narrows the Angular pipe case, where a references request on
+--     transform() answers with every pipe in the project (util/angular.lua)
 --   - in PHP, merges ripgrep call-site hits (util/grepref.lua) the LSP
 --     missed — Eloquent's magic methods hide receiver types from
 --     intelephense, so e.g. `$link->registerClick()` after a dynamic
@@ -19,6 +25,7 @@ local M = {}
 function M._gather(cb)
     local win = vim.api.nvim_get_current_win()
     local buf = vim.api.nvim_get_current_buf()
+    local cursor = vim.api.nvim_win_get_cursor(win)
     local word = vim.fn.expand("<cword>")
     local is_php = vim.bo[buf].filetype == "php"
     local clients = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })
@@ -30,6 +37,10 @@ function M._gather(cb)
 
     local function finish(items)
         local current = vim.api.nvim_buf_get_name(buf)
+        -- Angular: on a pipe's transform() the server answers for the whole
+        -- PipeTransform family, so narrow to this pipe (util/angular.lua).
+        local pipe
+        items, pipe = require("util.angular").narrow(buf, cursor[1] - 1, cursor[2], word, items, current)
         local here, elsewhere = {}, {}
         for _, it in ipairs(items) do
             local target = (vim.fn.fnamemodify(it.filename, ":p") == current) and here or elsewhere
@@ -46,7 +57,7 @@ function M._gather(cb)
         local ordered = {}
         vim.list_extend(ordered, here)
         vim.list_extend(ordered, elsewhere)
-        cb(ordered, current)
+        cb(ordered, current, pipe)
     end
 
     vim.lsp.buf_request_all(buf, "textDocument/references", function(client)
@@ -93,16 +104,19 @@ end
 
 local badge_ns = vim.api.nvim_create_namespace("references_tests_badge")
 
--- Right-aligned badge in the prompt line showing the test-filter state,
--- same style as the Aa badge in util/telescope_case.lua.
-local function place_badge(prompt_bufnr, hide_tests)
+-- Right-aligned badges in the prompt line showing the filter state, same
+-- style as the Aa badge in util/telescope_case.lua. Labels never change,
+-- only their highlight, so the prompt doesn't reflow as you toggle.
+local function place_badge(prompt_bufnr, state)
     vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(prompt_bufnr) then
             return
         end
         vim.api.nvim_buf_set_extmark(prompt_bufnr, badge_ns, 0, 0, {
-            -- Same label in both states, only the highlight changes.
-            virt_text = { { " tests ⟨C-t⟩ ", hide_tests and "DiagnosticWarn" or "Comment" } },
+            virt_text = {
+                { " tests ⟨C-t⟩ ", state.hide_tests and "DiagnosticWarn" or "Comment" },
+                { " deps ⟨C-l⟩ ", state.hide_deps and "DiagnosticWarn" or "Comment" },
+            },
             virt_text_pos = "right_align",
         })
     end)
@@ -115,7 +129,19 @@ local function is_test_item(item)
     if item.is_def then
         return false
     end
-    return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.loop.cwd()) == "test"
+    return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.uv.cwd()) == "test"
+end
+
+-- References inside a dependency folder (node_modules, vendor, .venv, …),
+-- same classification as the gray rows in the explorer and the pickers.
+-- Definitions are never counted: gd into a library is a legitimate jump and
+-- util/goto.lua has already dropped the library ones when your own code
+-- offered an answer.
+local function is_dep_item(item)
+    if item.is_def then
+        return false
+    end
+    return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.uv.cwd()) == "package"
 end
 
 -- Show a list of locations in the picker. Shared by gr (usages) and gd
@@ -167,53 +193,81 @@ function M.pick(items, opts)
         }
     end
 
-    -- hide_tests drops usages in test folders/files (<C-t> toggles it,
-    -- like the filter buttons on an IDE usages panel). The full
-    -- item list stays in this closure, so toggling just rebuilds the
-    -- picker from it with the typed query kept.
-    local function show(hide_tests, text)
-        local shown = items
-        if hide_tests then
-            shown = vim.tbl_filter(function(it)
-                return not is_test_item(it)
-            end, items)
+    -- Dependency hits start hidden — but only when there is something else
+    -- to show. gd into a library (a service class, a type in a .d.ts) is a
+    -- real navigation, and an empty picker would be a worse answer than a
+    -- gray one, so a result set that is *all* dependencies opens unfiltered.
+    local deps, own = 0, 0
+    for _, it in ipairs(items) do
+        if is_dep_item(it) then
+            deps = deps + 1
+        else
+            own = own + 1
+        end
+    end
+    local state = { hide_tests = false, hide_deps = deps > 0 and own > 0 }
+
+    -- hide_tests drops usages in test folders/files, hide_deps those inside
+    -- node_modules/vendor/… (<C-t> and <C-l> toggle them, like the filter
+    -- buttons on an IDE usages panel). The full item list stays in this
+    -- closure, so toggling just rebuilds the picker from it with the typed
+    -- query kept.
+    local function show(text)
+        local shown = vim.tbl_filter(function(it)
+            return not (state.hide_tests and is_test_item(it))
+                and not (state.hide_deps and is_dep_item(it))
+        end, items)
+        local hidden = {}
+        if state.hide_tests then
+            hidden[#hidden + 1] = "tests"
+        end
+        if state.hide_deps then
+            hidden[#hidden + 1] = ("%d in deps"):format(deps)
         end
         pickers
             .new({}, {
                 -- Never censor LSP results with the search-noise ignore
-                -- patterns: a reference inside vendor/node_modules is still
-                -- a reference (telescope filters picker entries through
-                -- file_ignore_patterns by default).
+                -- patterns: telescope filters picker entries through
+                -- file_ignore_patterns by default, which would drop
+                -- dependency hits outright — the <C-l> toggle above exists
+                -- precisely so they stay reachable.
                 file_ignore_patterns = {},
                 prompt_title = (opts.title or "References — current file first")
-                    .. (hide_tests and " — tests hidden" or ""),
+                    .. (#hidden > 0 and (" — " .. table.concat(hidden, ", ") .. " hidden") or ""),
                 default_text = text,
                 finder = finders.new_table({ results = shown, entry_maker = entry_maker }),
                 sorter = conf.generic_sorter({}),
                 previewer = conf.qflist_previewer({}),
                 attach_mappings = function(prompt_bufnr, map)
-                    place_badge(prompt_bufnr, hide_tests)
-                    map({ "i", "n" }, "<C-t>", function()
-                        local line = require("telescope.actions.state").get_current_line()
-                        require("telescope.actions").close(prompt_bufnr)
-                        show(not hide_tests, line)
-                    end, { desc = "Toggle hide tests" })
+                    place_badge(prompt_bufnr, state)
+                    local function toggle(key)
+                        return function()
+                            local line = require("telescope.actions.state").get_current_line()
+                            require("telescope.actions").close(prompt_bufnr)
+                            state[key] = not state[key]
+                            show(line)
+                        end
+                    end
+                    map({ "i", "n" }, "<C-t>", toggle("hide_tests"), { desc = "Toggle hide tests" })
+                    map({ "i", "n" }, "<C-l>", toggle("hide_deps"), { desc = "Toggle hide dependencies" })
                     return true
                 end,
             })
             :find()
     end
-    show(false)
+    show()
 end
 
 -- gr, and gd pressed on the definition itself: every usage of the symbol
 -- under the cursor, current file first.
 function M.open(opts)
     opts = opts or {}
-    M._gather(function(refs, current)
+    M._gather(function(refs, current, pipe)
         M.pick(refs, {
             current = current,
-            title = opts.title,
+            -- Naming the pipe keeps the narrowing visible: the list is the
+            -- usages of `| distance`, not of every PipeTransform there is.
+            title = opts.title or (pipe and ("Usages of the ‘" .. pipe .. "’ pipe — current file first")),
             empty = "No usages found",
         })
     end)

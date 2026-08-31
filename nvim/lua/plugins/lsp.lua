@@ -23,6 +23,10 @@ return {
             "cssls",
             "somesass_ls",
             "clangd",
+            -- Attaches only to dependency manifests (package.json,
+            -- composer.json, …) — its config's root_dir declines every other
+            -- json/toml/xml buffer. See lua/lsp/deps_lsp.lua.
+            "deps_lsp",
             -- jdtls is started by nvim-jdtls (see plugins/jdtls.lua), not here.
         }
 

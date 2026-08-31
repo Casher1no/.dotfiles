@@ -30,7 +30,7 @@ M.categories = {
                     local is_fav = favorites.is_favorite(name)
                     local item = {
                         desc = (is_fav and "★ " or "") .. name,
-                        keys = "ctrl-f",
+                        keys = "f",
                         project = name, -- used by the `f` toggle in M.open
                         action = function()
                             vim.cmd("cd " .. vim.fn.fnameescape(path))
@@ -48,13 +48,13 @@ M.categories = {
 
             local items = {}
             if #favs > 0 then
-                items[#items + 1] = { desc = "Favorites  (ctrl-f: toggle)", section = true }
+                items[#items + 1] = { desc = "Favorites  (f: toggle)", section = true }
                 for _, it in ipairs(favs) do
                     items[#items + 1] = it
                 end
                 items[#items + 1] = { desc = "All Projects", section = true }
             else
-                items[#items + 1] = { desc = "All Projects  (ctrl-f: favorite)", section = true }
+                items[#items + 1] = { desc = "All Projects  (f: favorite)", section = true }
             end
             for _, it in ipairs(rest) do
                 items[#items + 1] = it
@@ -245,6 +245,7 @@ M.categories = {
                 end,
             },
             { desc = "Toggle hide tests (in picker / references)", keys = "<C-t>" },
+            { desc = "Toggle hide dependencies (in references)", keys = "<C-l>" },
             { desc = "Open buffers", keys = "<leader>fb", cmd = "Telescope buffers" },
             { desc = "Recent files (all)", keys = "<leader>fr", cmd = "Telescope oldfiles" },
             { desc = "Recent files (this project)", keys = "<leader>fp" },
@@ -310,6 +311,27 @@ M.categories = {
             { desc = "Then type on every cursor at once", keys = "i / a / c / o, then type" },
             { desc = "Column select, then one cursor per line", keys = "<A-v>, grow with j/k, then i / a" },
             { desc = "Stop editing, then drop the extra cursors", keys = "<Esc>, <Esc>" },
+        },
+    },
+    {
+        name = "Local History",
+        icon = "",
+        -- The undo tree of the current buffer (see plugins/undotree.lua).
+        -- 'undofile' keeps this on disk between sessions, so the branches
+        -- reach back past the last time the file was closed.
+        items = {
+            {
+                desc = "Browse undo history",
+                keys = "<leader>u",
+                action = function()
+                    require("undotree").toggle()
+                end,
+            },
+            { desc = "Move a state / a change (in panel)", keys = "j k / J K" },
+            { desc = "Restore the highlighted state", keys = "<CR>" },
+            { desc = "Close the panel", keys = "q" },
+            { desc = "Undo", keys = "<C-z>" },
+            { desc = "Redo", keys = "<C-S-z> / <C-y>" },
         },
     },
     {
@@ -395,6 +417,7 @@ M.categories = {
             { desc = "Go to implementations", keys = "gi" },
             { desc = "Go to type definition", keys = "go" },
             { desc = "Find references / usages", keys = "gr" },
+            { desc = "Show library hits in usages (node_modules, vendor)", keys = "<C-l>" },
             { desc = "Incoming calls (who calls this)", keys = "<leader>ci" },
             { desc = "Outgoing calls (what this calls)", keys = "<leader>co" },
             {
@@ -679,7 +702,13 @@ local function render_search()
     end
     render_left()
     local n = #state.results
-    local lines = { "  " .. n .. (n == 1 and " match" or " matches"), "" }
+    -- With a query the marker sits on the focused match either way, so the
+    -- header is what distinguishes "still typing" from "→ moved the focus
+    -- into the list", where a row's own keys (f on a project) are live.
+    local lines = {
+        "  " .. n .. (n == 1 and " match" or " matches") .. (state.pane == "act" and n > 0 and "   ← edit" or ""),
+        "",
+    }
     local line_map = {}
     local hl_map = {}
     for i, r in ipairs(state.results) do
@@ -872,25 +901,31 @@ function M.open(category)
     vim.cmd("startinsert")
 
     -- Live filter: any edit to the search bar re-renders the right pane.
+    -- Also called straight from the mappings that branch on the query
+    -- (→, ←, f): TextChangedI only fires once the typeahead empties, so on
+    -- pasted or batched input a key can arrive while state.query still
+    -- describes the keystroke before it.
+    local function sync_query()
+        local text = vim.api.nvim_buf_get_lines(state.search_buf, 0, 1, false)[1] or ""
+        local q = vim.trim(text)
+        if q == state.query then
+            return
+        end
+        state.query = q
+        -- Editing hands the virtual focus back to the search bar: the match
+        -- list was just rebuilt under it, so whatever → had focused is gone
+        -- (and `f` types again).
+        state.pane = "cat"
+        update_hint()
+        if q ~= "" then
+            update_search()
+        end
+        render_left()
+        render_right()
+    end
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
         buffer = state.search_buf,
-        callback = function()
-            local text = vim.api.nvim_buf_get_lines(state.search_buf, 0, 1, false)[1] or ""
-            local q = vim.trim(text)
-            if q == state.query then
-                return
-            end
-            state.query = q
-            if q == "" then
-                state.pane = "cat" -- e.g. backspaced the query away
-            end
-            update_hint()
-            if q ~= "" then
-                update_search()
-            end
-            render_left()
-            render_right()
-        end,
+        callback = sync_query,
     })
 
     -- Fire the focused category's on_focus as the cursor moves in the right
@@ -1054,10 +1089,22 @@ function M.open(category)
             end
         end
     end
-    -- Re-send a key with its default behavior (bypassing these maps), used
-    -- to keep ←/→ editing the query text when one is typed.
-    local function feed_raw(key)
-        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "n", false)
+    -- What ←/→/f do to the query text when they are not commands. Both act
+    -- on the buffer directly instead of re-feeding the key: nvim_feedkeys
+    -- appends to the *end* of the typeahead, so when a chunk of input
+    -- arrives at once (a paste, or a fast enough burst) the re-fed key
+    -- overtakes the rest of the chunk — typing `def` landed the `f` after
+    -- `inition` and the arrows resolved against a cursor that had not moved
+    -- yet. Direct edits happen now, in order.
+    local function search_col()
+        return vim.api.nvim_win_get_cursor(state.search_win)[2]
+    end
+    local function search_text()
+        return vim.api.nvim_buf_get_lines(state.search_buf, 0, 1, false)[1] or ""
+    end
+    local function move_cursor(delta)
+        local col = math.min(math.max(search_col() + delta, 0), #search_text())
+        pcall(vim.api.nvim_win_set_cursor, state.search_win, { 1, col })
     end
 
     local function search_nav(delta)
@@ -1077,15 +1124,32 @@ function M.open(category)
     imap("<Down>", function() search_nav(1) end)
     imap("<Up>", function() search_nav(-1) end)
     imap("<Right>", function()
+        sync_query()
         if state.query ~= "" then
-            feed_raw("<Right>")
+            -- At the end of the query → hands the virtual focus to the match
+            -- list, which is what makes a row's own key (f on a project)
+            -- live. Mid-text it still moves the cursor, so a query can be
+            -- edited in the middle.
+            if state.pane ~= "act" and search_col() >= #search_text() and #state.results > 0 then
+                state.pane = "act"
+                render_right()
+                follow_virtual_focus(state.result_idx + 2) -- +2: header rows
+            else
+                move_cursor(1)
+            end
         elseif state.pane == "cat" then
             enter_act_pane()
         end
     end)
     imap("<Left>", function()
+        sync_query()
         if state.query ~= "" then
-            feed_raw("<Left>")
+            if state.pane == "act" then
+                state.pane = "cat" -- back to editing the query text
+                render_right()
+            else
+                move_cursor(-1)
+            end
         elseif state.pane == "act" then
             state.pane = "cat"
             render_right()
@@ -1107,20 +1171,49 @@ function M.open(category)
             enter_act_pane()
         end
     end)
-    -- Favorite-toggle for the focused project (Projects category). Ctrl-f,
-    -- because a plain `f` now types into the filter.
-    imap("<C-f>", function()
-        if state.query ~= "" or state.pane ~= "act" then
-            return
+    -- Favorite-toggle for the focused project (Projects category). Plain
+    -- `f`, but only where it cannot mean anything else: the search bar holds
+    -- the real focus the whole time, so `f` is a command exclusively once →
+    -- has moved the virtual focus onto a project row — from the category
+    -- list, or from a typed query into its match list. Anywhere else — still
+    -- typing (`server-f` has to reach the filter), a row that is not a
+    -- project — it goes into the query as a plain character.
+    imap("f", function()
+        sync_query() -- a pending keystroke would otherwise still read as ""
+        local searching = state.query ~= ""
+        local item
+        if state.pane == "act" then
+            -- +2: the "N matches" header and its blank line.
+            item = state.line_map[searching and state.result_idx + 2 or state.act_idx]
         end
-        local item = state.line_map[state.act_idx]
         if not (item and item.project) then
+            -- Not a command here: type it, at the cursor.
+            local col = search_col()
+            vim.api.nvim_buf_set_text(state.search_buf, 0, col, 0, col, { "f" })
+            pcall(vim.api.nvim_win_set_cursor, state.search_win, { 1, col + 1 })
+            sync_query()
             return
         end
-        require("util.favorites").toggle(item.project)
+        local project = item.project
+        require("util.favorites").toggle(project)
         local cat = M.categories[state.selected]
         if cat.dynamic then
             cat.items = cat.dynamic()
+        end
+        if searching then
+            -- The match list is rebuilt from the new items, so the focused
+            -- row has to be re-found by project name: its description just
+            -- gained or lost the ★ and its table identity is gone.
+            update_search() -- resets result_idx to 1
+            for i, r in ipairs(state.results) do
+                if r.item.project == project then
+                    state.result_idx = i
+                    break
+                end
+            end
+            render_right()
+            follow_virtual_focus(state.result_idx + 2)
+            return
         end
         render_right()
         -- The list re-sorts on toggle; if the old line vanished, snap back

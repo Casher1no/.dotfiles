@@ -152,8 +152,10 @@ function M.definition()
             -- Items are built here rather than via telescope's
             -- lsp_definitions: that filters LSP results through
             -- file_ignore_patterns (vendor/, node_modules/, …), silently
-            -- discarding definitions inside dependencies. Those patterns are
-            -- for search noise, not for explicit navigation.
+            -- discarding definitions inside dependencies — including the
+            -- case where the only definition is in one. Dependency hits are
+            -- demoted below (and in the references picker they go behind the
+            -- <C-l> toggle), never dropped without a fallback.
             local by_enc = {}
             for _, it in ipairs(locs) do
                 by_enc[it.enc] = by_enc[it.enc] or {}
@@ -174,6 +176,21 @@ function M.definition()
                     end
                 end
             end
+            -- A method that implements a library interface (Angular's
+            -- PipeTransform.transform, an RxJS operator, …) comes back as
+            -- *both* your implementation and the .d.ts declaration inside
+            -- node_modules, which turned a plain jump into a two-row picker
+            -- whose second row is a dependency. Your own code wins when it
+            -- has an answer; when the only definition is in a package, gd
+            -- still goes there — navigating into a library must keep working.
+            local project = vim.tbl_filter(function(item)
+                return require("util.tree_tints").classify(
+                    vim.fn.fnamemodify(item.filename, ":p"), vim.uv.cwd()) ~= "package"
+            end, def_items)
+            if #project > 0 then
+                def_items = project
+            end
+
             -- One definition (the normal case) → jump. Several (interface +
             -- implementation, overloads, a symbol two servers both claim) →
             -- pick one.

@@ -20,9 +20,11 @@ local ns = vim.api.nvim_create_namespace("tree_tints")
 -- contents' text, matching gitignored files).
 M.package_dirs = {
     node_modules = true,
+    bower_components = true,
     vendor = true,
     [".venv"] = true,
     venv = true,
+    ["site-packages"] = true,
     __pycache__ = true,
 }
 
@@ -87,13 +89,60 @@ vim.api.nvim_create_autocmd("ColorScheme", {
     callback = pin_highlights,
 })
 
+local is_win = vim.fn.has("win32") == 1
+
+-- Comparable form of a path: forward slashes everywhere, no trailing one,
+-- case-folded on Windows (F:\Projects and f:\projects are one directory).
+-- Only for comparing — the returned path keeps its original case elsewhere.
+-- Backslashes are folded on every OS, not only Windows: paths reach us from
+-- neo-tree (which normalizes to backslashes), from LSP servers, and from
+-- nvim itself, and vim.fs.normalize only rewrites separators when it is
+-- actually running on Windows. The segment loop below has always split on
+-- both, so this only makes the root comparison agree with it.
+local function norm(path)
+    if type(path) ~= "string" or path == "" then
+        return ""
+    end
+    -- Fast path: classify() runs for every visible row on every picker
+    -- keystroke and every explorer redraw, and vim.fs.normalize is ~5 µs a
+    -- call — 7x the rest of this function. A plain absolute path (no
+    -- backslash, no ~, no //, no /. segment, no trailing /) is already in
+    -- normal form, so hand it straight back.
+    if
+        not path:find("[\\~]")
+        and not path:find("//", 1, true)
+        and not path:find("/%.")
+        and path:sub(-1) ~= "/"
+    then
+        return path
+    end
+    return (vim.fs.normalize((path:gsub("\\", "/"))):gsub("/+$", ""))
+end
+
+local function canon(path)
+    path = norm(path)
+    return is_win and path:lower() or path
+end
+
 -- Which tint (if any) applies to a path. Only segments below the tree root
 -- count, so a project itself named "tests" doesn't tint everything. The
 -- outermost matching folder wins (a vendor dir inside tests stays gray).
--- Public: util/telescope_tints.lua reuses it for picker rows.
+-- Public: util/telescope_tints.lua reuses it for picker rows, and
+-- util/references.lua for the tests/dependencies filters.
+--
+-- The root is stripped through canon() on both sides: callers hand us paths
+-- from every source there is (neo-tree normalizes to backslashes, the LSP
+-- to whatever the server sent, telescope to nvim's own spelling), and a
+-- root that failed to strip is not harmless — one `vendor` segment above
+-- the project would classify the entire tree as a package.
 function M.classify(path, root)
-    if root and path:sub(1, #root) == root then
-        path = path:sub(#root + 1)
+    path = norm(path)
+    local r = canon(root)
+    -- canon() only lowercases, so byte offsets still line up with `path`
+    -- and the surviving segments keep their original case (is_test_file
+    -- patterns are case-sensitive: UserTest.php).
+    if r ~= "" and canon(path):sub(1, #r + 1) == r .. "/" then
+        path = path:sub(#r + 2)
     end
     local name
     for segment in path:gmatch("[^/\\]+") do
