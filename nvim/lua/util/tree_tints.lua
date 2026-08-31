@@ -16,16 +16,36 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("tree_tints")
 
--- Dependency/package folders (also used by neo-tree.lua to gray out their
--- contents' text, matching gitignored files).
+-- Folders holding code that isn't yours: third-party packages, virtualenvs,
+-- and the tool caches that sit beside them. neo-tree.lua grays their
+-- contents' text too (matching gitignored files), so the test for adding a
+-- name here is "would I ever edit a file in it", not "is it literally a
+-- dependency".
+--
+-- Deliberately NOT here, because the name collides with real source in some
+-- layout: `packages` (a monorepo's own workspaces live there), `env` (a
+-- Django/Flask app's environment module), `dist`/`build`/`out`/`target`/
+-- `bin`/`obj` (build output, and `bin` is a source dir in plenty of repos).
+-- Graying a folder the user actually works in is worse than missing one.
 M.package_dirs = {
+    -- JS/TS
     node_modules = true,
     bower_components = true,
+    jspm_packages = true,
+    [".yarn"] = true, -- yarn 2+ cache / unplugged deps
+    [".angular"] = true, -- ng build + vite dep cache
+    -- PHP, Ruby, Go
     vendor = true,
+    -- Python
     [".venv"] = true,
     venv = true,
     ["site-packages"] = true,
     __pycache__ = true,
+    [".tox"] = true,
+    [".nox"] = true,
+    [".pytest_cache"] = true,
+    [".mypy_cache"] = true,
+    [".ruff_cache"] = true,
 }
 
 -- Test folders ("test source roots").
@@ -37,6 +57,22 @@ M.test_dirs = {
     spec = true,
     specs = true,
     __tests__ = true,
+    __mocks__ = true, -- jest module mocks, only ever used from tests
+    e2e = true, -- Angular's e2e/, Playwright's default e2e/
+    cypress = true, -- cypress/e2e, cypress/support, cypress/fixtures
+    testdata = true, -- Go's conventional fixture dir
+}
+
+-- Test folders whose name can't be enumerated: .NET and Unity name a test
+-- project after the thing it tests — MyApp.Tests, MyApp.IntegrationTests,
+-- Game.PlayMode.Tests — so only the shape is knowable. Matched against a
+-- path segment, and only one that contains a dot.
+--
+-- The capital T is load-bearing: a case-insensitive `[Tt]ests?$` also
+-- matches a folder called `Latest`, and the dot keeps it from matching a
+-- file (`UserTests.cs` ends in `.cs`, not `Tests`).
+M.test_dir_patterns = {
+    "%..*Tests?$",
 }
 
 -- Colocated test files. React (and Go, and pytest) put the test next to the
@@ -152,6 +188,18 @@ function M.classify(path, root)
         if M.test_dirs[segment] then
             return "test"
         end
+        -- Gated on a dot: only a dotted segment can match the patterns, and
+        -- this skips the match calls for every plain directory name on
+        -- every row of every redraw. Checked inside the loop, so package
+        -- folders still win — a MyApp.Tests vendored into node_modules
+        -- stays gray, same as a colocated test file does.
+        if segment:find(".", 1, true) then
+            for _, pattern in ipairs(M.test_dir_patterns) do
+                if segment:match(pattern) then
+                    return "test"
+                end
+            end
+        end
         name = segment
     end
     -- Only after the loop, so a colocated test inside node_modules stays
@@ -203,6 +251,56 @@ function M.register(state)
     pcall(vim.api.nvim__redraw, { buf = state.bufnr, valid = false, flush = false })
 end
 
+-- lnum -> tint group for one rendered tree. Public so the mapping can be
+-- tested against a stub tree without a real render (a wrong mapping here is
+-- invisible: every row simply comes out untinted).
+--
+-- Goes through nui's public tree:get_node(lnum) rather than reaching into
+-- tree._. This used to index tree._.node_id_by_linenr and tree.nodes.by_id
+-- directly, because get_node resolved a winid (vim.fn.win_findbuf, one
+-- Fn-bridge round trip) on every call and nui rebuilt both tables eagerly
+-- on every render. Both halves of that stopped being true in nui 3d425a7
+-- ("perf(tree): optimize redraw for large amount of nodes", 2026-08-15,
+-- pulled in here on 2026-08-31): the tables are now *lazy* — nil after
+-- every layout change, built only once get_node has missed twice — so
+-- immediately after a render the direct index found nil, `rows` stayed
+-- empty, and the whole explorer quietly lost its tints. Nothing errored.
+-- get_node no longer touches win_findbuf for a numeric argument either
+-- (it is behind an `or`), and its first call walks the tree once and then
+-- memoizes, so the loop below still costs one O(visible) pass per render.
+function M.rows(tree, root, line_count)
+    local rows = {}
+    if not tree or type(tree.get_node) ~= "function" then
+        return rows
+    end
+    local resolved = 0
+    for lnum = 1, line_count do
+        local node = tree:get_node(lnum)
+        if node and node.path then
+            resolved = resolved + 1
+            local kind = M.classify(node.path, root)
+            if kind then
+                rows[lnum] = tint_groups[kind]
+            end
+        end
+    end
+    -- Say so rather than rendering a blank tree: this is exactly how the
+    -- nui change above went unnoticed. A rendered tree always has at least
+    -- its root node on line 1, so zero resolvable rows means the line->node
+    -- mapping broke again, not that the project is empty. Once a session.
+    if resolved == 0 and line_count > 1 and not M._warned then
+        M._warned = true
+        vim.schedule(function()
+            vim.notify(
+                "tree_tints: no explorer row resolved to a node — folder tints are off. "
+                    .. "nui's tree:get_node(lnum) API likely changed again.",
+                vim.log.levels.WARN
+            )
+        end)
+    end
+    return rows
+end
+
 vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, winid, bufnr)
         local state = states[bufnr]
@@ -219,25 +317,8 @@ vim.api.nvim_set_decoration_provider(ns, {
         local tick = vim.api.nvim_buf_get_changedtick(bufnr)
         local rows = tints[bufnr]
         if not rows or rows.tick ~= tick then
-            rows = { tick = tick }
-            -- nui's tree:get_node(lnum) resolves a window via
-            -- vim.fn.win_findbuf on every call even though numeric lookups
-            -- never use it — one Fn-bridge round trip per line. Index the
-            -- two tables it actually consults (nui rebuilds both on every
-            -- render) directly instead.
-            local by_linenr = state.tree._ and state.tree._.node_id_by_linenr
-            local by_id = state.tree.nodes and state.tree.nodes.by_id
-            if by_linenr and by_id then
-                for lnum = 1, vim.api.nvim_buf_line_count(bufnr) do
-                    local node = by_id[by_linenr[lnum]]
-                    if node and node.path then
-                        local kind = M.classify(node.path, state.path)
-                        if kind then
-                            rows[lnum] = tint_groups[kind]
-                        end
-                    end
-                end
-            end
+            rows = M.rows(state.tree, state.path, vim.api.nvim_buf_line_count(bufnr))
+            rows.tick = tick
             tints[bufnr] = rows
         end
         -- Skipping the cursor row keeps CursorLine visible there; moving

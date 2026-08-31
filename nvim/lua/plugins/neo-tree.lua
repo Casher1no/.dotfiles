@@ -15,23 +15,6 @@ local image_extensions = {
     avif = true,
 }
 
--- True for dependency/package folders (util/tree_tints.lua owns the list)
--- and anything inside them; their text renders grayed-out (same look as
--- gitignored files), even in projects without git.
-local function in_package_dir(node)
-    local package_dirs = require("util.tree_tints").package_dirs
-    if package_dirs[node.name] then
-        return true
-    end
-    local path = node.path or ""
-    for dir in pairs(package_dirs) do
-        if path:find("/" .. dir .. "/", 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
 return {
     "nvim-neo-tree/neo-tree.nvim",
     branch = "v3.x",
@@ -282,9 +265,21 @@ return {
             follow_current_file = { enabled = true }, -- highlight the file you're editing
             use_libuv_file_watcher = true, -- auto-refresh on external changes
             components = {
+                -- Dependency/package folders and everything inside them render
+                -- grayed-out (same look as gitignored files), even in projects
+                -- without git. The row also gets a gray background from
+                -- util/tree_tints.lua's decoration provider; this is the text.
+                --
+                -- classify() rather than a local path:find("/node_modules/"):
+                -- neo-tree normalizes its paths to *backslashes* on Windows, so
+                -- a hardcoded "/" separator grayed the folder (matched by name)
+                -- but never anything inside it — the feature silently half-
+                -- worked on one OS. classify() folds separators, case-folds on
+                -- Windows, and strips the tree root first, so a project that
+                -- itself lives under a vendor/ directory no longer grays whole.
                 name = function(config, node, state)
                     local result = require("neo-tree.sources.filesystem.components").name(config, node, state)
-                    if in_package_dir(node) then
+                    if require("util.tree_tints").classify(node.path, state.path) == "package" then
                         result.highlight = require("neo-tree.ui.highlights").GIT_IGNORED
                     end
                     return result

@@ -187,7 +187,8 @@ what you give it and then quietly does something else.
   calling `normalize` at all: `classify()` runs per visible row on every
   picker keystroke, and `normalize` costs ~5 µs a call (2.6 µs/call with
   the short-circuit vs 0.8 µs for the old raw prefix compare — 0.13 ms for
-  a 50-row redraw).
+  a 50-row redraw; 3.2 µs / 0.158 ms since `test_dir_patterns` was added,
+  +7.7%, which is why that check is gated on the segment containing a dot).
 
 - **A server offering inlay hints or code lenses does not mean either
   renders.** The client has to switch each on per buffer
@@ -255,17 +256,78 @@ what you give it and then quietly does something else.
   and assert it from a test — `plugins/undotree.lua` carries the source
   line numbers in a comment for exactly this reason.
 
+- **Reaching into a plugin's private table is a feature with no test and no
+  error path.** `util/tree_tints.lua` mapped explorer lines to nodes by
+  indexing nui's `tree._.node_id_by_linenr` and `tree.nodes.by_id`, to skip
+  a `vim.fn.win_findbuf` that `tree:get_node(lnum)` used to do per call.
+  nui 3d425a7 ("perf(tree): optimize redraw for large amount of nodes",
+  2026-08-15, pulled in here 2026-08-31) made both tables **lazy**: nil
+  after every layout change, built only once `get_node` has missed twice.
+  So right after a render the index found nil, the row map came out empty,
+  and every folder tint in the explorer vanished — no error, no warning, and
+  intermittently *back* again once a couple of unrelated `get_node` calls
+  had rebuilt the memo. The same commit also removed the win_findbuf that
+  motivated the shortcut (it is behind an `or`, so a numeric argument never
+  reaches it). Cost of going back through the public API: 2.12 ms vs
+  1.94 ms per render for a 454-row expanded tree (+9%), once per render, not
+  per frame — the changedtick cache already covers the frames. Two rules
+  out of this: prefer the plugin's public accessor unless the profile says
+  otherwise, and when a feature's whole output is "some rows look
+  different", make the empty case *say so* — `M.rows` notifies once a
+  session if a non-empty tree resolved zero nodes, which is the check that
+  would have caught this the day the package updated.
+
+- **A buffer line is not always a Vimscript string.** Lines can contain NUL
+  bytes, and every stack here has binaries you might open a file next to:
+  a `.pyc` under `__pycache__`, a compiled extension in `.venv`, a phar in
+  Laravel's `vendor/`, an esbuild/sharp `.node` in `node_modules`. Vimscript
+  strings cannot carry NUL, so such a line crosses the `vim.fn` bridge as a
+  **Blob** and any string function raises `E976: Using a Blob as a String`.
+  `util/ruler.lua` did `vim.fn.strdisplaywidth(line)` from a decoration
+  provider — and Neovim *disables* a provider that errors, so opening one
+  binary file killed the ruler for the rest of the session, with a
+  "Press ENTER" prompt on the way out. This is the same NUL problem as
+  `vim.fn.sha256()` on a gzip archive in `util/deps_lsp.lua`; anything that
+  hands buffer bytes to `vim.fn.*` has it.
+  Two non-fixes worth knowing: `nvim_strwidth()` accepts the NUL but stops
+  at the first one *and* counts a tab as one cell, which is the whole reason
+  `strdisplaywidth` was used; and `line:gsub("\0", …)` silently does nothing
+  useful, because LuaJIT reads the NUL as the end of the *pattern* and so
+  matches the empty string at every position. It has to be the `%z` class.
+  `ruler.display_width()` substitutes `^@` — which is exactly what Neovim
+  renders a NUL as, two cells (`virtcol` on `hello<NUL>world` is 12, not
+  11) — so the width stays honest and the value stays a String.
+
+- **A hardcoded `/` in a path match is a per-OS silent half-feature.**
+  `plugins/neo-tree.lua` grayed the *text* of dependency folders with
+  `path:find("/" .. dir .. "/")`. neo-tree normalizes its paths to
+  backslashes on Windows, so there the folder itself still grayed (it was
+  matched by `node.name`) but nothing inside it ever did — the feature
+  looked implemented, worked on two platforms, and quietly did half its job
+  on the third. It was also not root-relative, so a project living under a
+  `vendor/` parent grayed its entire tree. Both gone by routing it through
+  the same `tree_tints.classify()` the tints use: one classifier, root
+  stripped, separators folded, case-folded on Windows. When two features
+  describe the same concept ("this is a dependency"), they must not each
+  spell it out — the copy is where the drift lives.
+
 ## Known cross-platform gaps
 
-None currently open. Last swept after the `util/os_files.lua` change; the
-sweep is:
+None currently open. Last swept after the neo-tree `in_package_dir` change;
+the sweep is:
 
 ```sh
 # unix-only binaries invoked directly
 grep -rnE '"(open|cp|mv|rm|sh|xargs|stat|chmod|which|sed|awk)"' --include=*.lua lua/
 # separator assumptions that are false on Windows
 grep -rnE 'sub\(1, ?1\) ?== ?"/"' --include=*.lua lua/
+# path matching that hardcodes the separator (neo-tree hands out backslashes)
+grep -rnE ':find\("/' --include=*.lua lua/
 ```
+
+The third grep should only hit `tree_tints.lua`'s `norm()` fast path, which
+tests strings it has already folded to forward slashes. Anything matching a
+*directory name* there is a gap — route it through `tree_tints.classify()`.
 
 Read the hits; the first grep matches any string literal, not just spawns.
 As of the last sweep the only hits are a neo-tree *command* name
@@ -284,3 +346,7 @@ fixed — the shape of each is worth recognising:
 - `util/lsp_refresh.lua`'s watch bridge — dead *twice*: an `IS_WINDOWS`
   early return, and `root:sub(1, 1) == "/"` rejecting every `F:\...` root.
   Now `git ls-files` + libuv stat, one code path for all three.
+- `plugins/neo-tree.lua`'s `in_package_dir` — `path:find("/node_modules/")`
+  against paths neo-tree spells with backslashes, so on Windows only the
+  folder row itself grayed, never its contents. Now
+  `tree_tints.classify(node.path, state.path) == "package"`.

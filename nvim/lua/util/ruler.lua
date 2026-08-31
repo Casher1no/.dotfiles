@@ -43,6 +43,36 @@ local function record_leftcol()
     end
 end
 
+-- Display width of a buffer line, safe on binary content.
+--
+-- A buffer line can hold NUL bytes, and every stack this config is used on
+-- has binaries sitting in a directory you might open a file from: a .pyc
+-- under __pycache__, a compiled extension in .venv, a phar or a platform
+-- binary in Laravel's vendor/, an esbuild/sharp/node-sass .node in
+-- node_modules, a .pack under .git. Vimscript strings cannot carry NUL, so
+-- such a line crosses the vim.fn bridge as a *Blob* and strdisplaywidth()
+-- raises E976 "Using a Blob as a String". Raised from inside a decoration
+-- provider, Neovim prints it and disables the provider — so opening one
+-- binary file killed the ruler for the rest of the session, with a
+-- "Press ENTER" prompt on the way out.
+--
+-- Neovim renders a NUL as ^@, two cells (virtcol on "hello<NUL>world" is
+-- 12, not 11), so substituting that keeps the width exact and keeps the
+-- value a String. Two things that don't work here: nvim_strwidth(), which
+-- takes NUL-bearing strings but stops at the first one and counts a tab as
+-- a single cell — tabs being the whole reason strdisplaywidth() is used;
+-- and gsub("\0", ...), where LuaJIT reads the NUL as the end of the
+-- pattern and so matches the empty string at every position. It has to be
+-- the %z class.
+--
+-- Public so the binary case can be tested without a binary file.
+function M.display_width(line)
+    if line:find("%z") then
+        line = line:gsub("%z", "^@")
+    end
+    return vim.fn.strdisplaywidth(line)
+end
+
 function M.setup(column)
     M.column = column or M.column
     -- The built-in column is what's being replaced.
@@ -71,9 +101,13 @@ function M.setup(column)
             if not line then
                 return
             end
-            -- #line is a cheap upper bound check for the common (ASCII, no
-            -- tabs) case; only then is the real display width worth computing.
-            if #line >= M.column and vim.fn.strdisplaywidth(line) > screen_col + leftcol then
+            -- #line is a cheap lower bound on the display width for the
+            -- common (ASCII, no tabs, no NUL) case; only then is the real
+            -- width worth computing. A tab or a ^@ is wider than its one
+            -- byte, so a line under the threshold can still reach the
+            -- ruler — that is the pre-existing trade for not calling
+            -- strdisplaywidth on every line of every redraw.
+            if #line >= M.column and M.display_width(line) > screen_col + leftcol then
                 return
             end
             vim.api.nvim_buf_set_extmark(buf, ns, row, 0, {
