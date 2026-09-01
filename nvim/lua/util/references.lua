@@ -5,10 +5,14 @@
 --     (angularls + vtsls both cover .ts files and doubled every hit)
 --   - groups results: current file first, as compact "  123: code" rows,
 --     then other files as "path:123: code"
---   - hides hits inside dependency folders (node_modules, vendor, .venv, …)
---     behind a <C-l> toggle, the way an IDE hides library results: on a
---     method that implements a library interface the library's own
---     declarations bury your code
+--   - opens with test hits (<C-t>) and dependency hits (<C-l>) hidden, the
+--     way an IDE's usages panel does: on a method with three call sites and
+--     a dozen assertions about it, neither the assertions nor a library
+--     interface's own declarations are the answer to "where is this used?".
+--     Both toggles are one key, and neither hides past the point where the
+--     picker would be empty (M._initial_filters). Matches the find-files and
+--     live-grep pickers, which already hide tests by default and offer a
+--     "(with tests)" variant (util/telescope_case.lua)
 --   - narrows the Angular pipe case, where a references request on
 --     transform() answers with every pipe in the project (util/angular.lua)
 --   - in PHP, merges ripgrep call-site hits (util/grepref.lua) the LSP
@@ -144,6 +148,37 @@ local function is_dep_item(item)
     return require("util.tree_tints").classify(vim.fn.fnamemodify(item.filename, ":p"), vim.uv.cwd()) == "package"
 end
 
+-- Which filters a picker opens with, plus the counts for its title.
+--
+-- Test and dependency hits both start hidden: on a method that has a couple
+-- of call sites and a dozen assertions about it, the assertions are not the
+-- answer to "where is this used?" — <C-t> and <C-l> bring each back, the way
+-- the filter buttons on an IDE usages panel do.
+--
+-- Neither is hidden past the point where nothing would be left. A result set
+-- that is *all* tests is the answer, and gd into a library (a service class,
+-- a type in a .d.ts) is a real navigation — an empty picker is a worse
+-- answer than a gray one. Dependencies give way first: with nothing but
+-- tests and library hits, the tests are the more useful half to keep.
+--
+-- Exposed for headless tests.
+function M._initial_filters(items)
+    local deps, tests, plain = 0, 0, 0
+    for _, it in ipairs(items) do
+        if is_dep_item(it) then
+            deps = deps + 1
+        elseif is_test_item(it) then
+            tests = tests + 1
+        else
+            plain = plain + 1
+        end
+    end
+    return {
+        hide_deps = deps > 0 and (tests + plain) > 0,
+        hide_tests = tests > 0 and plain > 0,
+    }, deps, tests
+end
+
 -- Show a list of locations in the picker. Shared by gr (usages) and gd
 -- (definitions, util/goto.lua) so both look and filter the same.
 -- opts.title: picker title. opts.current: the file whose hits are shown as
@@ -193,19 +228,7 @@ function M.pick(items, opts)
         }
     end
 
-    -- Dependency hits start hidden — but only when there is something else
-    -- to show. gd into a library (a service class, a type in a .d.ts) is a
-    -- real navigation, and an empty picker would be a worse answer than a
-    -- gray one, so a result set that is *all* dependencies opens unfiltered.
-    local deps, own = 0, 0
-    for _, it in ipairs(items) do
-        if is_dep_item(it) then
-            deps = deps + 1
-        else
-            own = own + 1
-        end
-    end
-    local state = { hide_tests = false, hide_deps = deps > 0 and own > 0 }
+    local state, deps, tests = M._initial_filters(items)
 
     -- hide_tests drops usages in test folders/files, hide_deps those inside
     -- node_modules/vendor/… (<C-t> and <C-l> toggle them, like the filter
@@ -219,7 +242,7 @@ function M.pick(items, opts)
         end, items)
         local hidden = {}
         if state.hide_tests then
-            hidden[#hidden + 1] = "tests"
+            hidden[#hidden + 1] = ("%d in tests"):format(tests)
         end
         if state.hide_deps then
             hidden[#hidden + 1] = ("%d in deps"):format(deps)

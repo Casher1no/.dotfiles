@@ -277,6 +277,28 @@ what you give it and then quietly does something else.
   session if a non-empty tree resolved zero nodes, which is the check that
   would have caught this the day the package updated.
 
+- **The palette remembers its selection as a line number, so a row that
+  comes and goes moves the cursor under you.** `util/palette.lua` keeps
+  `state.act_idx` as a buffer line, and browse-mode `refresh()` re-renders
+  without re-finding the focused item (only the search path matches by
+  identity). Doctor's panel used to insert its outcome row above the action
+  buttons only when there *was* an outcome, so the first install shifted
+  every button down one and the next ⏎ pressed the row above the marker. Any
+  panel that repaints while it is open needs fixed geometry: Doctor now
+  always renders exactly two status rows (summary + last outcome, or the
+  progress bar while a batch runs) and the buttons keep a constant line.
+
+- **An async panel with no moving part reads as hung.** Doctor's installs are
+  a queue of asynchronous jobs and a single `brew install` can hold the queue
+  for a minute, so nothing repaints between job boundaries. The fix is a
+  120 ms spinner timer whose only job is to call `notify_change()` — started
+  with the batch, stopped with it, and stopping itself if the phase ends some
+  other way. It is affordable because the repaint costs 0.06 ms (`M.probe()`
+  is throttled and `notify_change` no-ops when the palette is closed). The
+  bar fills to the steps that have *finished*, never to the one in flight: a
+  bar reading 7/7 while the last install is still running is a lie you then
+  sit and wait on.
+
 - **A buffer line is not always a Vimscript string.** Lines can contain NUL
   bytes, and every stack here has binaries you might open a file next to:
   a `.pyc` under `__pycache__`, a compiled extension in `.venv`, a phar in

@@ -417,6 +417,7 @@ M.categories = {
             { desc = "Go to implementations", keys = "gi" },
             { desc = "Go to type definition", keys = "go" },
             { desc = "Find references / usages", keys = "gr" },
+            { desc = "Show test hits in usages (hidden by default)", keys = "<C-t>" },
             { desc = "Show library hits in usages (node_modules, vendor)", keys = "<C-l>" },
             { desc = "Incoming calls (who calls this)", keys = "<leader>ci" },
             { desc = "Outgoing calls (what this calls)", keys = "<leader>co" },

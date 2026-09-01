@@ -20,6 +20,7 @@ M.state = {
     probed_at = 0,
     pending = 0, -- async probes in flight
     busy = nil, -- label of a running install/update batch
+    progress = nil, -- { step, total, desc } of the batch's current job
     checking_updates = false,
     note = nil, -- persistent one-line outcome shown in the panel ("no updates found", …)
     log = {},
@@ -35,6 +36,15 @@ local HL = {
     checking = "Comment",
     unknown = "Comment",
 }
+
+-- The panel's only moving parts. A batch is a queue of asynchronous jobs and
+-- one of them can sit inside a single `brew install` for a minute, so nothing
+-- would repaint between job boundaries: the row would freeze mid-install and
+-- read as hung. The spinner timer drives the repaint instead (its only job —
+-- notify_change no-ops when the palette is closed).
+local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local BAR_W = 14
+local spin = { timer = nil, i = 1 }
 
 local function log(line)
     -- one table entry per screen line: stderr from failed commands is
@@ -113,6 +123,48 @@ local function notify_change()
             pcall(palette.refresh)
         end
     end)
+end
+
+-- Anything asynchronous the panel is waiting on.
+local function spinning()
+    return M.state.busy ~= nil or M.state.checking_updates
+end
+
+local function stop_spinner()
+    if spin.timer then
+        spin.timer:stop()
+        if not spin.timer:is_closing() then
+            spin.timer:close()
+        end
+        spin.timer = nil
+    end
+end
+
+local function start_spinner()
+    if spin.timer then
+        return
+    end
+    spin.i = 1
+    spin.timer = uv.new_timer()
+    spin.timer:start(120, 120, function()
+        -- Belt and braces: every caller stops the timer when its phase ends,
+        -- and a phase that ends some other way stops it here rather than
+        -- spinning for the rest of the session. Closing a libuv handle from
+        -- inside its own callback is legal but not worth the doubt.
+        if not spinning() then
+            return vim.schedule(stop_spinner)
+        end
+        spin.i = spin.i % #SPINNER + 1
+        notify_change()
+    end)
+end
+
+-- Truncate to a display width, for the fixed-width panel rows.
+local function fit(text, width)
+    if vim.fn.strdisplaywidth(text) <= width then
+        return text
+    end
+    return vim.fn.strcharpart(text, 0, math.max(1, width - 1)) .. "…"
 end
 
 local function parse_version(s)
@@ -255,6 +307,7 @@ function M.check_updates(cb)
         end
         fired = true
         M.state.checking_updates = false
+        stop_spinner()
         local n = 0
         for _, res in pairs(M.state.results) do
             if res.latest then
@@ -354,6 +407,7 @@ function M.check_updates(cb)
             end
         end
     end
+    start_spinner()
     set_note("checking for updates…")
     log("update check started (" .. (package_manager() or "no system manager") .. " + mason registry)")
     notify_change()
@@ -386,8 +440,13 @@ local function run_queue(jobs, done)
         i = i + 1
         local job = jobs[i]
         if not job then
+            M.state.progress = nil
             return done()
         end
+        -- step = the job now running, so the bar fills to step - 1 (finished
+        -- work) and the spinner covers the one in flight, whose duration
+        -- nothing here can know.
+        M.state.progress = { step = i, total = #jobs, desc = job.desc }
         log(job.desc)
         notify_change()
         job.run(next_job)
@@ -719,12 +778,16 @@ local function run_batch(label, jobs, cb, empty_note)
         return
     end
     M.state.busy = label
+    M.state.progress = { step = 1, total = #jobs, desc = jobs[1] and jobs[1].desc or "" }
+    start_spinner()
     set_note(label .. " running… (" .. #jobs .. " steps — see log)")
     log("── " .. label .. " (" .. #jobs .. " steps)")
     local log_start = #M.state.log
     notify_change()
     run_queue(jobs, function()
         M.state.busy = nil
+        M.state.progress = nil
+        stop_spinner()
         local failed = 0
         for i = log_start + 1, #M.state.log do
             if M.state.log[i]:find("FAILED", 1, true) then
@@ -822,20 +885,90 @@ function M.palette_items()
     M.probe()
     local items = {}
     local c = counts()
-    local summary
+
+    -- Two status rows, then the actions, then the dependencies.
+    --
+    -- Both status rows are ALWAYS rendered, even when there is nothing to say
+    -- on the second one. The palette tracks its selection by line number
+    -- (util/palette.lua's state.act_idx), so a row that appears when an
+    -- install starts would silently shift the focus onto the row above the
+    -- one you were on. Fixed geometry costs one near-empty line and keeps the
+    -- buttons where your fingers left them.
+    local head, detail, head_hl, detail_hl
     if M.state.busy then
-        summary = "⟳ " .. M.state.busy .. "…  (live — see log)"
-    elseif c.checking > 0 then
-        summary = "… checking " .. c.checking .. " of " .. #registry.entries
+        local p = M.state.progress
+        head = SPINNER[spin.i] .. " " .. M.state.busy
+        head_hl = "DiagnosticInfo"
+        if p then
+            head = head .. "  " .. p.step .. "/" .. p.total
+            -- Filled to the steps that have FINISHED: the one in flight is
+            -- what the spinner is for, and a bar that reads 7/7 while the
+            -- last install is still running is a lie you wait on.
+            local done = math.floor((p.step - 1) / p.total * BAR_W + 0.5)
+            detail = ("▰"):rep(done) .. ("▱"):rep(BAR_W - done) .. "  " .. p.desc
+        else
+            detail = ("▱"):rep(BAR_W) .. "  starting…"
+        end
+        detail_hl = "Comment"
+    elseif M.state.checking_updates then
+        head = SPINNER[spin.i] .. " checking for updates…"
+        head_hl = "DiagnosticInfo"
+        detail, detail_hl = "› " .. (M.state.note or "asking the package managers"), "Comment"
     else
-        summary = ("%d ok · %d missing · %d optional missing · %d updates"):format(
-            c.ok, c.missing, c.optional_missing, c.updates)
+        if c.checking > 0 then
+            head = "… checking " .. c.checking .. " of " .. #registry.entries
+        else
+            -- Only the counts that are non-zero: the row is 44 cells wide and
+            -- all four spelled out ran past the end, losing the update count —
+            -- which is the one worth acting on.
+            local parts = { c.ok .. " ok" }
+            if c.missing > 0 then
+                parts[#parts + 1] = c.missing .. " missing"
+            end
+            if c.optional_missing > 0 then
+                parts[#parts + 1] = c.optional_missing .. " optional missing"
+            end
+            if c.updates > 0 then
+                parts[#parts + 1] = c.updates .. " update" .. (c.updates == 1 and "" or "s")
+            end
+            head = table.concat(parts, " · ")
+        end
+        head_hl = (c.missing > 0 and "DiagnosticError")
+            or (c.updates + c.optional_missing > 0 and "DiagnosticWarn")
+            or "DiagnosticOk"
+        -- The last action's outcome, kept until the next one replaces it: a
+        -- floating notify fades while the palette holds focus, so this is
+        -- where the answer stays.
+        detail = M.state.note and ("› " .. M.state.note) or "› ⏎ on a row installs or explains it"
+        detail_hl = "Comment"
     end
+    items[#items + 1] = { desc = fit(head, 44), section = true, hl = head_hl }
+    items[#items + 1] = { desc = fit(detail, 44), section = true, hl = detail_hl }
+
+    -- Actions first. The dependency list runs well past the bottom of the
+    -- pane, and these are what the panel is opened for — down at the end they
+    -- were a scroll away, and the row that reported what they did had to be
+    -- moved next to them to be visible at all.
+    items[#items + 1] = { desc = "Actions", section = true }
     items[#items + 1] = {
-        desc = summary,
-        section = true,
-        hl = (c.missing > 0 and "DiagnosticError") or (c.updates + c.optional_missing > 0 and "DiagnosticWarn")
-            or "DiagnosticOk",
+        desc = "Install all missing", keys = "⏎", keep_open = true,
+        action = function() M.install_missing() end,
+    }
+    items[#items + 1] = {
+        desc = "Check for updates", keys = "⏎", keep_open = true,
+        action = function() M.check_updates() end,
+    }
+    items[#items + 1] = {
+        desc = "Update all outdated", keys = "⏎", keep_open = true,
+        action = function() M.update_all() end,
+    }
+    items[#items + 1] = {
+        desc = "Re-check everything", keys = "⏎", keep_open = true,
+        action = function() M.probe(true) end,
+    }
+    items[#items + 1] = {
+        desc = "Open Doctor log", keys = "⏎",
+        action = function() M.open_log() end,
     }
 
     local seen_groups = {}
@@ -901,36 +1034,6 @@ function M.palette_items()
         }
     end
 
-    items[#items + 1] = { desc = "Actions", section = true }
-    -- Last action's outcome, kept until the next action replaces it. It sits
-    -- HERE, next to the buttons: the list is longer than the pane, so when
-    -- the selection is down at the actions the top rows are scrolled away —
-    -- and the floating notify fades while the palette holds focus.
-    if M.state.checking_updates then
-        items[#items + 1] = { desc = "⟳ checking for updates…", section = true, hl = "DiagnosticInfo" }
-    elseif M.state.note then
-        items[#items + 1] = { desc = "› " .. M.state.note, section = true, hl = "Comment" }
-    end
-    items[#items + 1] = {
-        desc = "Install all missing", keys = "⏎", keep_open = true,
-        action = function() M.install_missing() end,
-    }
-    items[#items + 1] = {
-        desc = "Check for updates", keys = "⏎", keep_open = true,
-        action = function() M.check_updates() end,
-    }
-    items[#items + 1] = {
-        desc = "Update all outdated", keys = "⏎", keep_open = true,
-        action = function() M.update_all() end,
-    }
-    items[#items + 1] = {
-        desc = "Re-check everything", keys = "⏎", keep_open = true,
-        action = function() M.probe(true) end,
-    }
-    items[#items + 1] = {
-        desc = "Open Doctor log", keys = "⏎",
-        action = function() M.open_log() end,
-    }
     return items
 end
 
