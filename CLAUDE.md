@@ -299,6 +299,25 @@ what you give it and then quietly does something else.
   bar reading 7/7 while the last install is still running is a lie you then
   sit and wait on.
 
+- **A codepoint copied from an icon set's website is not the codepoint the
+  patched font draws.** Nerd Fonts remapped the Material Design range in v3,
+  so `plugins/mini-icons.lua` had `routes/` wearing U+F12B0 — which is
+  `md-keyboard_f6` in all sixteen Nerd Fonts installed here, an F6 key on the
+  routes folder. Nothing errors: a glyph is a glyph. The font itself is the
+  source of truth and it is one command away, because the patcher keeps the
+  source icon names in the `post` table:
+
+  ```sh
+  python3 -c "from fontTools.ttLib import TTFont; import sys; \
+    print(TTFont(sys.argv[1], lazy=True).getBestCmap().get(int(sys.argv[2], 16)))" \
+    ~/Library/Fonts/JetBrainsMonoNerdFont-Regular.ttf F046A   # -> md-routes
+  ```
+
+  Check the name of every glyph before adding it, and check it is present in
+  each installed family (patched fonts of different vintages carry different
+  MDI versions). `mini_icons.get("directory", name)` in a headless nvim is
+  the other half of the test — it proves the name actually maps.
+
 - **A buffer line is not always a Vimscript string.** Lines can contain NUL
   bytes, and every stack here has binaries you might open a file next to:
   a `.pyc` under `__pycache__`, a compiled extension in `.venv`, a phar in

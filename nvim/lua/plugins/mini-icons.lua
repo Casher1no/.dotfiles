@@ -35,9 +35,12 @@ return {
         add({ glyph = "󰪺", hl = "MiniIconsGrey" }, "cache", "tmp", "temp")
         add({ glyph = "󰅩", hl = "MiniIconsBlue" }, "component", "components")
         add({ glyph = "󰕰", hl = "MiniIconsPurple" }, "ui", "widgets")
-        add({ glyph = "󰚀", hl = "MiniIconsAzure" }, "element", "elements")
+        -- Atomic-design building blocks (md-yin_yang was here).
+        add({ glyph = "󰝨", hl = "MiniIconsAzure" }, "element", "elements")
         add({ glyph = "󰐩", hl = "MiniIconsRed" }, "directive", "directives")
-        add({ glyph = "󰈬", hl = "MiniIconsGreen" }, "page", "pages", "views", "screens")
+        -- A window, not a document: pages/ and views/ hold screens of the
+        -- app. The Word .docx icon (md-file_word) was here.
+        add({ glyph = "󰣆", hl = "MiniIconsGreen" }, "page", "pages", "views", "screens")
         add({ glyph = "󰟥", hl = "MiniIconsYellow" }, "pipe", "pipes")
         add({ glyph = "󰃭", hl = "MiniIconsYellow" }, "event", "events")
         add({ glyph = "󰠮", hl = "MiniIconsGreen" }, "record", "records")
@@ -67,14 +70,16 @@ return {
         add({ glyph = "󰲂", hl = "MiniIconsAzure" }, "doc", "docs")
         add({ glyph = "󰲃", hl = "MiniIconsGrey" }, "log", "logs", "logger", "loggers")
         add({ glyph = "󰉓", hl = "MiniIconsBlue" }, "asset", "assets", "resources", "static")
-        add({ glyph = "󰭃", hl = "MiniIconsPurple" }, "style", "styles", "css", "scss", "sass", "themes")
+        -- A palette. md-origin — a map pin — was here.
+        add({ glyph = "󰏘", hl = "MiniIconsPurple" }, "style", "styles", "css", "scss", "sass", "themes")
         add({ glyph = "󰉏", hl = "MiniIconsPurple" }, "image", "images", "img", "icons")
         add({ glyph = "󱍙", hl = "MiniIconsCyan" }, "audio", "sounds", "music")
         add({ glyph = "󰢬", hl = "MiniIconsYellow" }, "auth", "security")
         add({ glyph = "󰉐", hl = "MiniIconsRed" }, "secret", "secrets", "private")
         add({ glyph = "󰉌", hl = "MiniIconsBlue" }, "user", "users", "profile", "profiles", "account", "accounts")
         add({ glyph = "󰡰", hl = "MiniIconsPurple" }, "api", "network", "http", "connection")
-        add({ glyph = "󰠅", hl = "MiniIconsCyan" }, "gateway", "gateways", "proxy", "proxies")
+        -- Traffic routed through a hub. The Azure logo was here.
+        add({ glyph = "󰴽", hl = "MiniIconsCyan" }, "gateway", "gateways", "proxy", "proxies")
         add({ glyph = "󰍛", hl = "MiniIconsBlue" }, "core", "main", "_Core", "_core")
         add({ glyph = "󰚝", hl = "MiniIconsYellow" }, "feature", "features", "module", "modules")
         add({ glyph = "󰙅", hl = "MiniIconsRed" }, "state", "store", "stores", "reducers", "actions")
@@ -85,8 +90,24 @@ return {
         add({ glyph = "󰛫", hl = "MiniIconsGrey" }, "archive", "backup", "zip")
         add({ glyph = "󰀻", hl = "MiniIconsBlue" }, "app", "apps")
         add({ glyph = "󰆦", hl = "MiniIconsOrange" }, "storage")
-        add({ glyph = "󰄄", hl = "MiniIconsPurple" }, "framework", "frameworks", "vendor")
-        add({ glyph = "󱊰", hl = "MiniIconsRed" }, "route", "routes", "routing")
+        -- Split from vendor, which shared this line under md-camera_iris:
+        -- a framework is what you build on top of…
+        add({ glyph = "󰌨", hl = "MiniIconsPurple" }, "framework", "frameworks")
+        -- …vendor is the code you never touch. Grey like the other
+        -- machine-owned folders, matching the dimmed rows the explorer
+        -- already gives it (util/tree_tints.lua classifies it as a package
+        -- dir).
+        add({ glyph = "󰏖", hl = "MiniIconsGrey" }, "vendor")
+        -- 󰑪 is md-routes. The glyph that was here (U+F12B0) is md-keyboard_f6
+        -- in every Nerd Font installed — an F6 key on the routes folder.
+        -- A codepoint from an icon set's website is not the codepoint the
+        -- patched font uses; check the font's own cmap (fontTools) before
+        -- trusting one.
+        add({ glyph = "󰑪", hl = "MiniIconsRed" }, "route", "routes", "routing", "router", "routers")
+        -- Page-with-header-and-footer, for the app shells a layouts/ folder
+        -- holds — deliberately not the grid glyph 󰕰 above, which is already
+        -- ui/widgets and looks the same at terminal size.
+        add({ glyph = "󰽿", hl = "MiniIconsAzure" }, "layout", "layouts")
         add({ glyph = "󰞉", hl = "MiniIconsGreen" }, "public", "www", "web")
         add({ glyph = "󰛖", hl = "MiniIconsRed" }, "font", "fonts")
         add({ glyph = "󰗊", hl = "MiniIconsAzure" }, "i18n", "locale", "locales", "lang", "translations")
