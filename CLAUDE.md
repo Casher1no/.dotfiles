@@ -339,6 +339,55 @@ what you give it and then quietly does something else.
   renders a NUL as, two cells (`virtcol` on `hello<NUL>world` is 12, not
   11) — so the width stays honest and the value stays a String.
 
+- **`textDocument/documentSymbol` is not an outline; it is every symbol the
+  server can name.** Telescope's `lsp_document_symbols` flattens the whole
+  reply, so a single Angular method contributed `url` / `attempts` /
+  `onDone` / `r` / `first` and lua_ls contributed the *contents of every
+  table literal* — 155 rows for `util/tree_tints.lua`, of which 27 are the
+  file's structure. A kind blacklist cannot fix this: the noise is `Variable`
+  and so is a top-level `const PAGE_SIZE = 25`. `util/symbols.lua` filters
+  positionally instead — anything under a Method/Function/Constructor is a
+  local, and anything under a value (object/array/variable/property) is the
+  shape of that literal unless it *contains* a function or a type, which is
+  what keeps `export default { methods: { save() {} } }` and lua's
+  `nvim_create_autocmd { callback = function` in the list. The second rule is
+  switched off for files with no code structure at all, because in an Angular
+  template, an HTML page or a JSON file the nested literals *are* the
+  content. Measured 155→27 rows (lua), 28→16 (an Angular component), 21→10
+  (a PHP class); `_flatten` costs 176 µs for a 684-node tree, once per `gs`.
+  Two things to know when touching it: servers do **not** answer in document
+  order (vtsls answers alphabetically), and ordering must use
+  `selectionRange`, not `range` — a decorated class's range starts at its
+  `@Component({…})`, so ordering by `range` makes the line numbers in the
+  list read backwards.
+
+- **Two servers can describe the same symbol and disagree about what is
+  inside it.** On an Angular component's `.ts`, vtsls and angularls both
+  answer `documentSymbol` with a `ZzFinalComponent` Class over the *identical*
+  range — vtsls's copy holds the class's members, angularls's holds the inline
+  template's DOM. So the usual dedup-by-identity is wrong here in a way that
+  is invisible: keep the first and every Angular component loses its members
+  (whichever reply lost the race), keep both and the class is listed twice.
+  `util/symbols.lua` merges instead — one node, children unioned, recursively
+  — and it has to happen *before* the range-nesting step, because containment
+  reads an identical range as "inside" and would otherwise nest the class
+  under itself. This is the shape to expect wherever two servers claim one
+  file; `util/goto.lua` and `util/references.lua` dedup rather than merge
+  because a `Location` has no children to lose.
+
+- **`vim.fn.fnamemodify(f, ":p") == other` is a Windows-only silent
+  half-feature, and it was in the usages picker.** `nvim_buf_get_name` hands
+  back backslashes, `vim.uri_to_fname` hands back whatever the server sent,
+  and NTFS does not care about case — so on Windows the "current file first"
+  grouping in `util/references.lua` simply stopped grouping, with no error
+  and nothing to notice but a worse-ordered list. There is now one
+  `references.same_file()` doing normalise + fold + case-fold (it folds `\`
+  itself, since `vim.fs.normalize` only does that *on* Windows — which is
+  also what lets the Windows arm be tested from macOS with `load_as()`), and
+  `util/goto.lua` uses it rather than keeping its own copy. It costs 4.97 µs
+  against 0.72 µs for the raw compare — 3 ms on a 350-hit picker, once, on a
+  keypress, which is why it is not cached.
+
 - **A hardcoded `/` in a path match is a per-OS silent half-feature.**
   `plugins/neo-tree.lua` grayed the *text* of dependency folders with
   `path:find("/" .. dir .. "/")`. neo-tree normalizes its paths to

@@ -1,6 +1,8 @@
 -- gd (bound in plugins/lsp.lua) is a toggle, IDE-style: on a usage it jumps
 -- straight to the definition, and pressed again on the definition itself it
--- lists the usages (util/references.lua) instead of navigating nowhere.
+-- lists the usages (util/references.lua) instead of navigating nowhere —
+-- or jumps to the single usage when there is only one, which makes gd a
+-- two-way hop between a symbol and its one use.
 -- Folds in the special cases first: Inertia page strings in PHP, template
 -- class names → stylesheet selector, and stylesheet selectors → their usages
 -- (util/styleref.lua), each of which toggles the same way.
@@ -47,14 +49,6 @@ local function warming_up(bufnr)
     end
 end
 
-local function same_file(a, b)
-    a, b = vim.fs.normalize(a), vim.fs.normalize(b)
-    if vim.fn.has("win32") == 1 then
-        a, b = a:lower(), b:lower()
-    end
-    return a == b
-end
-
 -- True when the cursor was already sitting on one of the definitions the
 -- server returned — servers answer a definition request made on a
 -- declaration with that declaration itself. That is the toggle: there is
@@ -68,7 +62,7 @@ function M._at_definition(buf, row, locs)
         -- the whole declaration, which is still "on the definition".
         local range = it.loc.targetSelectionRange or it.loc.range or it.loc.targetRange
         if uri and range
-            and same_file(vim.uri_to_fname(uri), file)
+            and require("util.references").same_file(vim.uri_to_fname(uri), file)
             and row >= range.start.line
             and row <= range["end"].line
         then
@@ -139,13 +133,16 @@ function M.definition()
                 -- resolve, or the declaration itself (some servers answer
                 -- empty there rather than pointing at themselves). Either
                 -- way the usages are the useful answer.
-                require("util.references").open()
+                require("util.references").open({ jump_if_single = true })
                 return
             end
 
-            -- Second press, on the definition → the other half of the toggle.
+            -- Second press, on the definition → the other half of the
+            -- toggle. A symbol used in exactly one place makes that a plain
+            -- round trip: gd on the declaration lands on the use, gd there
+            -- comes back. Only a real list gets a picker.
             if M._at_definition(buf, start_pos[1] - 1, locs) then
-                require("util.references").open()
+                require("util.references").open({ jump_if_single = true })
                 return
             end
 

@@ -23,6 +23,30 @@
 -- plugins/telescope.lua), so finder order is display order.
 local M = {}
 
+local is_win = vim.fn.has("win32") == 1
+
+-- "Is this the same file?" Windows spells one path several ways —
+-- nvim_buf_get_name answers with backslashes, vim.uri_to_fname with whatever
+-- the server sent, and NTFS does not care about case — so normalise, fold
+-- separators and case-fold before comparing (the canonical shape, see
+-- util/focus_tree.lua). The backslash fold is explicit rather than left to
+-- vim.fs.normalize, which only rewrites `\` when it is running on Windows.
+--
+-- Every "am I already here?" comparison in this module and in util/goto.lua
+-- goes through it: a raw `==` between those two sources silently stops
+-- matching on Windows, and the symptom is only that the current file's hits
+-- stop sorting first.
+function M.same_file(a, b)
+    if type(a) ~= "string" or type(b) ~= "string" or a == "" or b == "" then
+        return false
+    end
+    local function canon(path)
+        path = (vim.fs.normalize(vim.fn.fnamemodify(path, ":p")):gsub("\\", "/"))
+        return is_win and path:lower() or path
+    end
+    return canon(a) == canon(b)
+end
+
 -- Fetch, dedup and order reference items; cb(items, current_file). Called
 -- with an empty list when there are none — the picker reports that case.
 -- Separate from the picker so it can be tested headlessly.
@@ -47,7 +71,7 @@ function M._gather(cb)
         items, pipe = require("util.angular").narrow(buf, cursor[1] - 1, cursor[2], word, items, current)
         local here, elsewhere = {}, {}
         for _, it in ipairs(items) do
-            local target = (vim.fn.fnamemodify(it.filename, ":p") == current) and here or elsewhere
+            local target = M.same_file(it.filename, current) and here or elsewhere
             table.insert(target, it)
         end
         local by_pos = function(a, b)
@@ -179,12 +203,36 @@ function M._initial_filters(items)
     }, deps, tests
 end
 
+-- The one place gd should land, or nil when the picker has to be shown.
+--
+-- `origin` is where the cursor already is (or `true` when there is nowhere to
+-- discount): with includeDeclaration on, a variable used exactly once answers
+-- with two items — its declaration and the use — and gd pressed on the
+-- declaration should land on the use rather than offer a one-and-a-half-row
+-- picker. Matching on file+line, not file+line+col, because the cursor sits
+-- somewhere inside the word while the item points at its first character.
+--
+-- Exposed for headless tests.
+function M._only_target(items, origin)
+    local candidates = items
+    if type(origin) == "table" then
+        candidates = vim.tbl_filter(function(it)
+            return not (it.lnum == origin.lnum and M.same_file(it.filename, origin.filename))
+        end, items)
+    end
+    return #candidates == 1 and candidates[1] or nil
+end
+
 -- Show a list of locations in the picker. Shared by gr (usages) and gd
 -- (definitions, util/goto.lua) so both look and filter the same.
 -- opts.title: picker title. opts.current: the file whose hits are shown as
 --   compact "  123: code" rows (defaults to the current buffer).
 -- opts.empty: what to say when there is nothing to show.
--- opts.jump_if_single: skip the picker and jump when there is one location.
+-- opts.jump_if_single: skip the picker and jump when there is one place to
+--   go. Pass `true` for a list that cannot contain the cursor's own line
+--   (definitions), or `{ filename = …, lnum = … }` to discount it — a usages
+--   request includes the declaration, so "one usage" is two items and the
+--   one worth jumping to is the other one.
 function M.pick(items, opts)
     opts = opts or {}
     local current = opts.current or vim.api.nvim_buf_get_name(0)
@@ -192,11 +240,11 @@ function M.pick(items, opts)
         vim.notify(opts.empty or "Nothing to show", vim.log.levels.INFO)
         return
     end
-    if opts.jump_if_single and #items == 1 then
-        local it = items[1]
+    local single = opts.jump_if_single and M._only_target(items, opts.jump_if_single)
+    if single then
         vim.cmd("normal! m'") -- jumplist entry, so <C-o> comes back here
-        vim.cmd("edit " .. vim.fn.fnameescape(it.filename))
-        pcall(vim.api.nvim_win_set_cursor, 0, { it.lnum, math.max(0, (it.col or 1) - 1) })
+        vim.cmd("edit " .. vim.fn.fnameescape(single.filename))
+        pcall(vim.api.nvim_win_set_cursor, 0, { single.lnum, math.max(0, (single.col or 1) - 1) })
         vim.cmd("normal! zz")
         return
     end
@@ -206,7 +254,7 @@ function M.pick(items, opts)
     local conf = require("telescope.config").values
 
     local function entry_maker(item)
-        local in_current = vim.fn.fnamemodify(item.filename, ":p") == current
+        local in_current = M.same_file(item.filename, current)
         local text = vim.trim(item.text or "")
         -- ·grep = found by text search, not confirmed by the LSP
         -- (util/grepref.lua) — could be a same-named method elsewhere.
@@ -282,12 +330,24 @@ function M.pick(items, opts)
 end
 
 -- gr, and gd pressed on the definition itself: every usage of the symbol
--- under the cursor, current file first.
+-- under the cursor, current file first. opts.jump_if_single (gd) goes
+-- straight to the one usage instead of showing a single-row picker.
 function M.open(opts)
     opts = opts or {}
+    -- Captured before the request: _gather is async, and gd chains into this
+    -- from a definition request, so the cursor may have moved by the time the
+    -- answer lands.
+    local origin = {
+        filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p"),
+        lnum = vim.api.nvim_win_get_cursor(0)[1],
+    }
     M._gather(function(refs, current, pipe)
         M.pick(refs, {
             current = current,
+            -- gd only: a single usage is a navigation, not a list. gr always
+            -- shows the picker — "find usages" answering by teleporting you
+            -- somewhere loses the count you asked for.
+            jump_if_single = opts.jump_if_single and origin or nil,
             -- Naming the pipe keeps the narrowing visible: the list is the
             -- usages of `| distance`, not of every PipeTransform there is.
             title = opts.title or (pipe and ("Usages of the ‘" .. pipe .. "’ pipe — current file first")),

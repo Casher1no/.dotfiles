@@ -411,7 +411,7 @@ M.categories = {
         name = "LSP / Code",
         icon = "",
         items = {
-            { desc = "Definition, or usages when on it", keys = "gd" },
+            { desc = "Definition, or the single usage when on it", keys = "gd" },
             { desc = "Class usages / definition (styles)", keys = "gd / gr" },
             { desc = "Go to declaration", keys = "gD" },
             { desc = "Go to implementations", keys = "gi" },
@@ -422,12 +422,13 @@ M.categories = {
             { desc = "Incoming calls (who calls this)", keys = "<leader>ci" },
             { desc = "Outgoing calls (what this calls)", keys = "<leader>co" },
             {
-                desc = "Document symbols (methods, vars, …)",
+                desc = "File structure (classes, methods, fields)",
                 keys = "gs",
                 action = function()
-                    require("telescope.builtin").lsp_document_symbols()
+                    require("util.symbols").open()
                 end,
             },
+            { desc = "Show locals inside method bodies (hidden by default)", keys = "<C-l>" },
             {
                 -- `:lsp restart` with no args only restarts clients attached
                 -- to the *current* buffer, and errors if there are none. We

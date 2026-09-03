@@ -115,8 +115,11 @@ return {
                     end
                     require("util.references").open()
                 end, opts)
+                -- gs is the file's structure, not every symbol in it:
+                -- locals inside method bodies are behind <C-l>
+                -- (util/symbols.lua).
                 vim.keymap.set("n", "gs", function()
-                    require("telescope.builtin").lsp_document_symbols()
+                    require("util.symbols").open()
                 end, opts)
 
                 -- Call hierarchy: who calls this (incoming) / what it calls
