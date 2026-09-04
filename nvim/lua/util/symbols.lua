@@ -156,9 +156,20 @@ local function by_name_position(a, b)
     return by_extent(a, b)
 end
 
-local function node_key(node)
-    return ("%d|%d|%d|%d|%d|%s"):format(node.kind, node.range.start.line,
-        node.range.start.character, node.range["end"].line, node.range["end"].character, node.name)
+-- Same declaration, by the only identity a DocumentSymbol has. Compared
+-- field by field rather than through a formatted key string: names are
+-- almost always unique within a level, so the bucket below finds nothing to
+-- compare against and this never runs — where a `string.format` key had to
+-- be built for every node in the file first.
+local function same_symbol(a, b)
+    if a.kind ~= b.kind then
+        return false
+    end
+    local ar, br = a.range, b.range
+    return ar.start.line == br.start.line
+        and ar.start.character == br.start.character
+        and ar["end"].line == br["end"].line
+        and ar["end"].character == br["end"].character
 end
 
 -- Two servers answer for the same .ts file in an Angular project, and they
@@ -167,24 +178,40 @@ end
 -- angularls fills it with the inline template's DOM. Dropping the duplicate
 -- loses whichever half arrived second — it silently emptied every Angular
 -- component of its members — and keeping both lists the class twice. So
--- merge them: one node, children unioned, recursively. It runs before the
--- range nesting below, not after: with a flat reply the containment test
--- reads an identical range as "inside", so a duplicate class would nest
--- under itself rather than merely repeat.
-local function merge(list)
-    local out, by_key = {}, {}
+-- merge them: one node, children unioned, recursively.
+--
+-- It has to run before the range nesting below: with a flat reply the
+-- containment test reads an identical range as "inside", so a duplicate
+-- class would nest under itself rather than merely repeat.
+--
+-- Only ever called when more than one server answered — see M._gather. One
+-- server does not report a symbol twice at the same level, and walking the
+-- whole tree to prove it cost 69 µs of the 176 µs a `gs` used to spend in
+-- _flatten, on every file in every single-server language.
+function M._merge(list)
+    local out, by_name = {}, {}
     for _, node in ipairs(list) do
-        local key = node_key(node)
-        local kept = by_key[key]
+        local bucket = by_name[node.name]
+        if not bucket then
+            bucket = {}
+            by_name[node.name] = bucket
+        end
+        local kept
+        for _, candidate in ipairs(bucket) do
+            if same_symbol(candidate, node) then
+                kept = candidate
+                break
+            end
+        end
         if kept then
             if node.children then
-                kept.children = merge(vim.list_extend(kept.children or {}, node.children))
+                kept.children = M._merge(vim.list_extend(kept.children or {}, node.children))
             end
         else
-            by_key[key] = node
+            bucket[#bucket + 1] = node
             out[#out + 1] = node
             if node.children then
-                node.children = merge(node.children)
+                node.children = M._merge(node.children)
             end
         end
     end
@@ -220,7 +247,6 @@ end
 -- `hidden` marks a row that lives inside a body: kept in the list so the
 -- <C-l> toggle costs no second request. Exposed for headless tests.
 function M._flatten(nodes, flat)
-    nodes = merge(nodes)
     if flat then
         nodes = nest_by_range(nodes)
     end
@@ -259,7 +285,8 @@ function M._flatten(nodes, flat)
     return rows
 end
 
--- Ask every attached server, merge, flatten. cb(rows) — never called when no
+-- Ask every attached server, merge when more than one answered, flatten.
+-- cb(rows) — never called when no
 -- server can answer (that case notifies instead). Separate from the picker so
 -- it can be driven headlessly.
 function M._gather(cb)
@@ -272,11 +299,22 @@ function M._gather(cb)
     vim.lsp.buf_request_all(buf, "textDocument/documentSymbol", function()
         return { textDocument = vim.lsp.util.make_text_document_params(buf) }
     end, function(results)
-        local nodes, flat = {}, false
+        local nodes, flat, answered = {}, false, 0
         for _, res in pairs(results or {}) do
             local part, part_flat = to_nodes(res.result)
-            flat = flat or part_flat
-            vim.list_extend(nodes, part)
+            if #part > 0 then
+                answered = answered + 1
+                flat = flat or part_flat
+                vim.list_extend(nodes, part)
+            end
+        end
+        -- Merging is only meaningful across servers: one server does not
+        -- report a symbol twice at the same level, so on every single-server
+        -- language (lua, php, python, C++, …) this skips a full walk of the
+        -- tree. Two servers claiming one file — vtsls + angularls on a .ts —
+        -- is the case it exists for.
+        if answered > 1 then
+            nodes = M._merge(nodes)
         end
         cb(M._flatten(nodes, flat))
     end)

@@ -354,7 +354,7 @@ what you give it and then quietly does something else.
   switched off for files with no code structure at all, because in an Angular
   template, an HTML page or a JSON file the nested literals *are* the
   content. Measured 155→27 rows (lua), 28→16 (an Angular component), 21→10
-  (a PHP class); `_flatten` costs 176 µs for a 684-node tree, once per `gs`.
+  (a PHP class); `_flatten` costs 89 µs for a 684-node tree, once per `gs`.
   Two things to know when touching it: servers do **not** answer in document
   order (vtsls answers alphabetically), and ordering must use
   `selectionRange`, not `range` — a decorated class's range starts at its
@@ -373,7 +373,11 @@ what you give it and then quietly does something else.
   reads an identical range as "inside" and would otherwise nest the class
   under itself. This is the shape to expect wherever two servers claim one
   file; `util/goto.lua` and `util/references.lua` dedup rather than merge
-  because a `Location` has no children to lose.
+  because a `Location` has no children to lose. Merging is gated on *two
+  servers having answered* — one server never reports a symbol twice at the
+  same level, and walking the tree to prove it cost 69 µs of a 176 µs `gs` on
+  every single-server language (lua, php, python, C++), which is most of
+  them.
 
 - **`vim.fn.fnamemodify(f, ":p") == other` is a Windows-only silent
   half-feature, and it was in the usages picker.** `nvim_buf_get_name` hands
@@ -384,9 +388,24 @@ what you give it and then quietly does something else.
   `references.same_file()` doing normalise + fold + case-fold (it folds `\`
   itself, since `vim.fs.normalize` only does that *on* Windows — which is
   also what lets the Windows arm be tested from macOS with `load_as()`), and
-  `util/goto.lua` uses it rather than keeping its own copy. It costs 4.97 µs
-  against 0.72 µs for the raw compare — 3 ms on a 350-hit picker, once, on a
-  keypress, which is why it is not cached.
+  `util/goto.lua` uses it rather than keeping its own copy.
+
+  Being correct here is *cheaper* than the broken compare was, but only after
+  two things. First, split it: `canon_path()` returns the one spelling and
+  `same_file()` is the one-off wrapper, so a loop canonicalises the side that
+  does not change **once** — the pickers all do. Second, short-circuit the
+  rewriting for a path that is already absolute, forward-slashed and free of
+  `.`/`..`/`//` segments, which is what almost everything out of the LSP
+  already is. That anchoring is the part to be careful with: the obvious
+  `path:find("/%.")` also matches every dotfile, and since this config lives
+  in `~/Projects/.dotfiles` it sent *every* path here down the slow path — the
+  short-circuit benchmarked as doing nothing at all until it became
+  `/%.%.?/` plus `/%.%.?$`. Numbers for the 350-hit picker's current-file
+  split: 339 µs with the original raw `fnamemodify == ` (and wrong on
+  Windows), 308 µs going through `same_file`, 228 µs as it now stands.
+  `canon_path` is 0.66 µs against the raw compare's 0.72 µs. Nothing is
+  cached: a cache keyed on the raw string goes stale after `:cd`, because
+  `:p` resolves against the working directory.
 
 - **A hardcoded `/` in a path match is a per-OS silent half-feature.**
   `plugins/neo-tree.lua` grayed the *text* of dependency folders with
@@ -415,8 +434,9 @@ grep -rnE 'sub\(1, ?1\) ?== ?"/"' --include=*.lua lua/
 grep -rnE ':find\("/' --include=*.lua lua/
 ```
 
-The third grep should only hit `tree_tints.lua`'s `norm()` fast path, which
-tests strings it has already folded to forward slashes. Anything matching a
+The third grep should only hit `tree_tints.lua`'s `norm()` fast path and
+`references.lua`'s `needs_rewrite()`, both of which test strings they have
+already folded to forward slashes. Anything matching a
 *directory name* there is a gap — route it through `tree_tints.classify()`.
 
 Read the hits; the first grep matches any string literal, not just spawns.

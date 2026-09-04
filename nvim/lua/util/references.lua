@@ -25,26 +25,67 @@ local M = {}
 
 local is_win = vim.fn.has("win32") == 1
 
--- "Is this the same file?" Windows spells one path several ways —
--- nvim_buf_get_name answers with backslashes, vim.uri_to_fname with whatever
--- the server sent, and NTFS does not care about case — so normalise, fold
--- separators and case-fold before comparing (the canonical shape, see
--- util/focus_tree.lua). The backslash fold is explicit rather than left to
--- vim.fs.normalize, which only rewrites `\` when it is running on Windows.
+-- Does this path still need `vim.fs.normalize` + `fnamemodify(":p")` run over
+-- it? Both are ~1.8 µs together and neither changes a path that is already
+-- absolute, already forward-slashed and free of `.`/`..`/`//` segments —
+-- which is what nearly every path out of the LSP already is.
 --
--- Every "am I already here?" comparison in this module and in util/goto.lua
--- goes through it: a raw `==` between those two sources silently stops
--- matching on Windows, and the symptom is only that the current file's hits
--- stop sorting first.
+-- The dot test has to be anchored on both sides (`/%.%.?/` and `/%.%.?$` —
+-- only a `.` or `..` that is a whole segment). The obvious `/%.` also matches
+-- every dotfile and every dot-directory, and this config lives in
+-- `~/Projects/.dotfiles`, so that spelling sent literally every path here
+-- down the slow path and the short-circuit measured as doing nothing at all.
+-- Same shape as util/tree_tints.lua's `norm()`.
+local function needs_rewrite(path)
+    if not (path:byte(1) == 47 or path:find("^%a:/")) then
+        return true -- relative, or a UNC \\server share
+    end
+    return path:byte(-1) == 47 -- trailing slash: normalize strips it
+        or path:find("//", 1, true) ~= nil
+        or path:find("/%.%.?/") ~= nil
+        or path:find("/%.%.?$") ~= nil
+end
+
+-- One path, in the single spelling every comparison here uses. Windows spells
+-- the same file several ways — nvim_buf_get_name answers with backslashes,
+-- vim.uri_to_fname with whatever the server sent, and NTFS does not care
+-- about case — so fold separators and case-fold there. Neither fold happens
+-- on unix, where a backslash is a legal filename character and `Foo.ts` and
+-- `foo.ts` are two files; `is_win` is read once at load, which is what lets
+-- `load_as()` exercise the Windows arm from a Mac.
+--
+-- Returns nil for anything that isn't a usable path, so a nil result never
+-- compares equal to another nil result.
+function M.canon_path(path)
+    if type(path) ~= "string" or path == "" then
+        return nil
+    end
+    if is_win then
+        path = (path:gsub("\\", "/"))
+    end
+    if needs_rewrite(path) then
+        path = vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
+        if is_win then
+            path = (path:gsub("\\", "/"))
+        end
+    end
+    return is_win and path:lower() or path
+end
+
+-- "Is this the same file?" for a one-off comparison. In a loop, canon the
+-- side that does not change once and compare `canon_path` results directly —
+-- that is half the work, and this module's pickers do it.
+--
+-- A raw `==` between an `nvim_buf_get_name` and a `vim.uri_to_fname` silently
+-- stops matching on Windows, and the only symptom is that the current file's
+-- hits stop sorting first, so every such comparison here and in
+-- util/goto.lua goes through this.
 function M.same_file(a, b)
-    if type(a) ~= "string" or type(b) ~= "string" or a == "" or b == "" then
-        return false
+    if a == b then
+        return type(a) == "string" and a ~= ""
     end
-    local function canon(path)
-        path = (vim.fs.normalize(vim.fn.fnamemodify(path, ":p")):gsub("\\", "/"))
-        return is_win and path:lower() or path
-    end
-    return canon(a) == canon(b)
+    local ca = M.canon_path(a)
+    return ca ~= nil and ca == M.canon_path(b)
 end
 
 -- Fetch, dedup and order reference items; cb(items, current_file). Called
@@ -69,9 +110,13 @@ function M._gather(cb)
         -- PipeTransform family, so narrow to this pipe (util/angular.lua).
         local pipe
         items, pipe = require("util.angular").narrow(buf, cursor[1] - 1, cursor[2], word, items, current)
+        -- The file we are standing in is constant across the loop, so it is
+        -- canonicalised once: on a 350-hit picker that is the difference
+        -- between one canon per item and two.
+        local current_key = M.canon_path(current)
         local here, elsewhere = {}, {}
         for _, it in ipairs(items) do
-            local target = M.same_file(it.filename, current) and here or elsewhere
+            local target = (M.canon_path(it.filename) == current_key) and here or elsewhere
             table.insert(target, it)
         end
         local by_pos = function(a, b)
@@ -114,12 +159,16 @@ function M._gather(cb)
         local root = vim.fs.root(buf, { "composer.json", ".git" }) or vim.fn.getcwd()
         require("util.grepref").method_calls(word, root, function(grep_items)
             -- LSP hits win; grep only fills lines the LSP didn't report.
+            -- Keyed through canon_path for the same reason as everything
+            -- else here: these two lists come from different producers (the
+            -- LSP and ripgrep), so on Windows a raw compare lets a hit the
+            -- server already reported through a second time as a ·grep row.
             local have = {}
             for _, it in ipairs(items) do
-                have[vim.fn.fnamemodify(it.filename, ":p") .. ":" .. it.lnum] = true
+                have[M.canon_path(it.filename) .. ":" .. it.lnum] = true
             end
             for _, it in ipairs(grep_items) do
-                local key = vim.fn.fnamemodify(it.filename, ":p") .. ":" .. it.lnum
+                local key = M.canon_path(it.filename) .. ":" .. it.lnum
                 if not have[key] then
                     have[key] = true
                     items[#items + 1] = it
@@ -216,8 +265,11 @@ end
 function M._only_target(items, origin)
     local candidates = items
     if type(origin) == "table" then
+        local origin_key = M.canon_path(origin.filename)
         candidates = vim.tbl_filter(function(it)
-            return not (it.lnum == origin.lnum and M.same_file(it.filename, origin.filename))
+            -- lnum first: it rejects almost every item without touching a
+            -- path at all.
+            return not (it.lnum == origin.lnum and M.canon_path(it.filename) == origin_key)
         end, items)
     end
     return #candidates == 1 and candidates[1] or nil
@@ -253,8 +305,9 @@ function M.pick(items, opts)
     local finders = require("telescope.finders")
     local conf = require("telescope.config").values
 
+    local current_key = M.canon_path(current)
     local function entry_maker(item)
-        local in_current = M.same_file(item.filename, current)
+        local in_current = M.canon_path(item.filename) == current_key
         local text = vim.trim(item.text or "")
         -- ·grep = found by text search, not confirmed by the LSP
         -- (util/grepref.lua) — could be a same-named method elsewhere.
